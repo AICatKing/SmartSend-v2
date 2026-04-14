@@ -70,7 +70,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
       service: "api",
       status: database.status === "up" ? "ok" : "degraded",
       timestamp: new Date().toISOString(),
-      version: "phase-1",
+      version: "phase-6-a",
       database,
     });
 

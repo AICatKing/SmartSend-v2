@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { entityIdSchema, providerSchema } from "@smartsend/domain";
+import { entityIdSchema } from "../../domain/src/contact.js";
+import { providerSchema } from "../../domain/src/provider.js";
 
 const isoDateTimeSchema = z.string().datetime();
 const senderNameSchema = z.string().trim().min(1).max(200);

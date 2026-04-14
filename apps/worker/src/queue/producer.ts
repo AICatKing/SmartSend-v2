@@ -26,6 +26,6 @@ export async function publishToAsyncQueue(message: QueuePublishMessage) {
       messageKind: message.kind,
       jobId: message.jobId,
     },
-    "Queue producer adapter placeholder invoked. Real Vercel Queues integration is not implemented in Phase 1.",
+    "Queue producer adapter recorded a local publish event. Real Vercel Queues delivery is still pending a later work package.",
   );
 }

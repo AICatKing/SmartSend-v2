@@ -5,6 +5,8 @@ export * from "./campaigns-service.js";
 export * from "./contact.js";
 export * from "./contacts-service.js";
 export * from "./provider.js";
+export * from "./provider-adapter.js";
+export * from "./send-job-processing-service.js";
 export * from "./template.js";
 export * from "./template-render.js";
 export * from "./templates-service.js";

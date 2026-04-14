@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { entityIdSchema, templateRenderContextSchema } from "@smartsend/domain";
+import { entityIdSchema } from "../../domain/src/contact.js";
+import { templateRenderContextSchema } from "../../domain/src/template.js";
 
 const isoDateTimeSchema = z.string().datetime();
 const templateNameSchema = z.string().trim().min(1).max(200);

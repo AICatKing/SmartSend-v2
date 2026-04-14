@@ -7,8 +7,14 @@ import {
 import { healthResponseSchema } from "@smartsend/contracts";
 import { checkDatabaseConnection } from "@smartsend/db";
 import { localAsyncShimServiceId } from "@smartsend/domain";
+import { z } from "zod";
 
 import { localAsyncShimEnv } from "./env.js";
+import { handleConsumerEvent } from "./queue/consumer-handler.js";
+
+const internalConsumeOnceBodySchema = z.object({
+  messageCount: z.coerce.number().int().positive().max(100).default(1),
+});
 
 export function createLocalAsyncShimApp() {
   const logger = createLogger({
@@ -59,12 +65,36 @@ export function createLocalAsyncShimApp() {
       service: localAsyncShimServiceId,
       status: database.status === "up" ? "ok" : "degraded",
       timestamp: new Date().toISOString(),
-      version: "phase-1",
+      version: "phase-6-a",
       database,
     });
 
     return reply.status(response.status === "ok" ? 200 : 503).send(response);
   });
+
+  if (localAsyncShimEnv.NODE_ENV !== "production") {
+    app.post("/internal/consume-once", async (request, reply) => {
+      const internalHeader = request.headers["x-smartsend-internal-dev"];
+
+      if (internalHeader !== "true") {
+        throw new AppError(
+          "FORBIDDEN",
+          "This internal development route requires x-smartsend-internal-dev: true.",
+        );
+      }
+
+      const body = internalConsumeOnceBodySchema.parse(request.body ?? {});
+      const summary = await handleConsumerEvent({
+        source: "local-shim",
+        messageCount: body.messageCount,
+      });
+
+      return reply.status(200).send({
+        mode: "development-only",
+        summary,
+      });
+    });
+  }
 
   return app;
 }

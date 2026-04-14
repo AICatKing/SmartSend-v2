@@ -3,7 +3,7 @@ import {
   contactCustomFieldsSchema,
   contactGroupNameSchema,
   entityIdSchema,
-} from "@smartsend/domain";
+} from "../../domain/src/contact.js";
 
 const isoDateTimeSchema = z.string().datetime();
 const emailSchema = z.string().trim().email().max(320);

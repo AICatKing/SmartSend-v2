@@ -4,8 +4,8 @@ import {
   campaignStatusSchema,
   campaignTargetSchema,
   sendJobStatusSchema,
-} from "@smartsend/domain";
-import { entityIdSchema } from "@smartsend/domain";
+} from "../../domain/src/campaign.js";
+import { entityIdSchema } from "../../domain/src/contact.js";
 
 const isoDateTimeSchema = z.string().datetime();
 

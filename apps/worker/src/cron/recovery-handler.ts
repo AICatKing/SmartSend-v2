@@ -26,6 +26,6 @@ export async function handleRecoveryEvent(event: RecoveryHandlerEvent) {
       source: event.source,
       reason: event.reason,
     },
-    "Cron recovery handler placeholder invoked. Reconciliation logic is intentionally not implemented in Phase 1.",
+    "Cron recovery handler is intentionally deferred. Recovery and reconciliation remain a later work package.",
   );
 }

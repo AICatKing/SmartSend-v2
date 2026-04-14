@@ -29,10 +29,10 @@ export function startLocalAsyncShim() {
   );
 
   return {
-    async simulateConsumerPoll() {
-      await handleConsumerEvent({
+    async simulateConsumerPoll(messageCount = 1) {
+      return handleConsumerEvent({
         source: "local-shim",
-        messageCount: 0,
+        messageCount,
       });
     },
     async simulateRecoverySweep() {
