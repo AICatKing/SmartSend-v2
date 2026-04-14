@@ -4,6 +4,9 @@ import postgres from "postgres";
 
 import * as schema from "./schema/index.js";
 
+export type DatabaseClient = ReturnType<typeof postgres>;
+export type Database = ReturnType<typeof drizzle<typeof schema>>;
+
 export function createDatabase(connectionString: string) {
   const client = postgres(connectionString, {
     prepare: false,

@@ -8,8 +8,14 @@ import { healthResponseSchema } from "@smartsend/contracts";
 import { checkDatabaseConnection } from "@smartsend/db";
 
 import { apiEnv } from "./env.js";
+import { registerApiRoutes } from "./routes/index.js";
+import { createApiServices, type ApiServices } from "./services.js";
 
-export function createApiApp() {
+type CreateApiAppOptions = {
+  services?: Partial<Parameters<typeof createApiServices>[0]>;
+};
+
+export function createApiApp(options: CreateApiAppOptions = {}) {
   const logger = createLogger({
     service: "@smartsend/api",
     level: apiEnv.LOG_LEVEL,
@@ -19,6 +25,13 @@ export function createApiApp() {
     logger,
     disableRequestLogging: apiEnv.NODE_ENV === "test",
   });
+
+  const services = createApiServices({
+    logger: app.log,
+    ...options.services,
+  });
+
+  app.decorate("services", services);
 
   app.setErrorHandler((error, request, reply) => {
     const appError =
@@ -62,6 +75,12 @@ export function createApiApp() {
     });
 
     return reply.status(response.status === "ok" ? 200 : 503).send(response);
+  });
+
+  void registerApiRoutes(app);
+
+  app.addHook("onClose", async () => {
+    await services.close();
   });
 
   return app;

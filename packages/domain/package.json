@@ -10,6 +10,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@smartsend/contracts": "file:../contracts",
+    "@smartsend/db": "file:../db",
+    "@smartsend/shared": "file:../shared",
     "zod": "^3.24.1"
   }
 }
