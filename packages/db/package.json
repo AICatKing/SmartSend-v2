@@ -8,13 +8,14 @@
   "types": "./src/index.ts",
   "scripts": {
     "db:check": "tsx src/scripts/check-connection.ts",
-    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
-    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "db:generate": "tsc -p tsconfig.drizzle.json && drizzle-kit generate --config drizzle.config.mjs",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@smartsend/shared": "file:../shared",
     "drizzle-orm": "^0.36.4",
+    "dotenv": "^16.4.7",
     "postgres": "^3.4.5",
     "zod": "^3.24.1"
   },
