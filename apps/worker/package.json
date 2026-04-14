@@ -1,0 +1,22 @@
+{
+  "name": "@smartsend/local-async-shim",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@smartsend/contracts": "file:../../packages/contracts",
+    "@smartsend/db": "file:../../packages/db",
+    "@smartsend/domain": "file:../../packages/domain",
+    "@smartsend/shared": "file:../../packages/shared",
+    "fastify": "^4.28.1",
+    "zod": "^3.24.1"
+  }
+}

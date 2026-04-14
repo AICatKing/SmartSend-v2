@@ -1,0 +1,29 @@
+{
+  "name": "smartsend-v2",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:api": "npm run dev --workspace @smartsend/api",
+    "dev:async-shim": "npm run dev --workspace @smartsend/local-async-shim",
+    "dev:worker": "npm run dev:async-shim",
+    "start:api": "npm run start --workspace @smartsend/api",
+    "start:async-shim": "npm run start --workspace @smartsend/local-async-shim",
+    "start:worker": "npm run start:async-shim",
+    "db:check": "npm run db:check --workspace @smartsend/db",
+    "db:generate": "npm run db:generate --workspace @smartsend/db",
+    "db:migrate": "npm run db:migrate --workspace @smartsend/db"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
