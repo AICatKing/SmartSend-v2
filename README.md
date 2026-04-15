@@ -14,7 +14,7 @@ Current implemented areas:
 Current intentionally deferred areas:
 
 - real Vercel Queues production integration
-- frontend wiring
+- dashboard and rich reporting
 
 ## Prerequisites
 
@@ -94,6 +94,20 @@ API health endpoint:
 ```bash
 curl http://127.0.0.1:3000/health
 ```
+
+Frontend integration page (served by `apps/api`):
+
+```bash
+open http://127.0.0.1:3000/app
+```
+
+The page uses current protected APIs (dev headers) and provides:
+
+- workspace sending config get/upsert
+- contacts list/create/import/delete
+- templates list/create/delete
+- campaigns list/create-draft/queue
+- campaign progress/send-jobs/recent-failures views
 
 ## Start Local Async Shim
 
@@ -215,6 +229,8 @@ Current processing strategy:
 
 Current operator-facing campaign projections are intentionally read-only views derived from database truth:
 
+- `GET /api/campaigns`
+  - campaign list for current workspace
 - `GET /api/campaigns/:campaignId/progress`
   - aggregated status counts from `send_jobs`
 - `GET /api/campaigns/:campaignId/send-jobs`
@@ -308,6 +324,33 @@ curl -H 'x-dev-user-id: user_local_owner' \
   -H 'x-dev-workspace-id: ws_local_demo' \
   http://127.0.0.1:3000/api/campaigns/<campaign_id>/recent-failures
 ```
+
+## Minimal Local Frontend Integration Flow
+
+1. Start Postgres and run `npm run db:migrate`.
+2. Run `npm run db:seed:local`.
+3. Start API: `npm run dev:api`.
+4. Start worker local async shim: `npm run dev:async-shim` (with `PROVIDER_MODE=mock`).
+5. Open `http://127.0.0.1:3000/app`.
+6. Confirm request context defaults:
+   - `x-dev-user-id=user_local_owner`
+   - `x-dev-workspace-id=ws_local_demo`
+7. In the page, run the minimal loop:
+   - load/upsert workspace sending config
+   - create/import contacts
+   - create a template
+   - create campaign draft and queue it
+   - open progress/send-jobs/recent-failures for that campaign
+8. Trigger worker consumer poll:
+
+```bash
+curl -X POST http://127.0.0.1:3001/internal/consume-once \
+  -H 'content-type: application/json' \
+  -H 'x-smartsend-internal-dev: true' \
+  -d '{"messageCount":1}'
+```
+
+9. Back in `/app`, refresh or enable polling on campaign progress to observe state changes.
 
 ## Minimal Local Retry Validation
 

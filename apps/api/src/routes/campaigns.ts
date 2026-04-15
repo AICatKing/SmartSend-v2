@@ -3,6 +3,7 @@ import { AppError } from "@smartsend/shared";
 import {
   createCampaignDraft,
   getCampaignProgress,
+  listCampaigns,
   listCampaignRecentFailures,
   listCampaignSendJobs,
   queueCampaign,
@@ -13,6 +14,17 @@ import { requireApiContext } from "./helpers.js";
 export async function registerCampaignRoutes(
   app: FastifyInstance<any, any, any, any>,
 ) {
+  app.get("/api/campaigns", { preHandler: requireApiContext }, async (request) => {
+    const query = (request.query ?? {}) as Record<string, unknown>;
+
+    return listCampaigns(app.services.requireDatabase(), {
+      workspaceId: request.apiContext.currentWorkspaceId,
+      status: query.status,
+      limit: query.limit,
+      offset: query.offset,
+    });
+  });
+
   app.post(
     "/api/campaigns/drafts",
     { preHandler: requireApiContext },

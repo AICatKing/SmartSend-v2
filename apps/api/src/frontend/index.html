@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartSend v2 Frontend Integration</title>
+    <link rel="stylesheet" href="/app/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <h1>SmartSend v2 Frontend Integration</h1>
+        <p>Minimal local loop: config -> contacts/templates/campaign -> queue -> progress</p>
+      </header>
+
+      <section class="panel" id="auth-panel">
+        <h2>Request Context</h2>
+        <p class="hint">These values are sent as dev headers on every API request.</p>
+        <div class="grid two">
+          <label>
+            User ID
+            <input id="auth-user-id" type="text" />
+          </label>
+          <label>
+            Workspace ID
+            <input id="auth-workspace-id" type="text" />
+          </label>
+          <label>
+            User Email (optional)
+            <input id="auth-user-email" type="text" />
+          </label>
+          <label>
+            User Name (optional)
+            <input id="auth-user-name" type="text" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="auth-save" type="button">Save Context</button>
+        </div>
+      </section>
+
+      <section class="panel" id="sending-config-panel">
+        <h2>Workspace Sending Config</h2>
+        <div class="grid two">
+          <label>
+            Provider
+            <input id="cfg-provider" type="text" value="resend" disabled />
+          </label>
+          <label>
+            From Email
+            <input id="cfg-from-email" type="email" />
+          </label>
+          <label>
+            From Name
+            <input id="cfg-from-name" type="text" />
+          </label>
+          <label>
+            Reply-To Email (optional)
+            <input id="cfg-reply-to" type="email" />
+          </label>
+          <label>
+            API Key (leave blank to keep existing)
+            <input id="cfg-api-key" type="password" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="cfg-load" type="button">Load Config</button>
+          <button id="cfg-save" type="button">Upsert Config</button>
+        </div>
+      </section>
+
+      <section class="panel" id="contacts-panel">
+        <h2>Contacts</h2>
+        <div class="grid three">
+          <label>
+            Email
+            <input id="contact-email" type="email" />
+          </label>
+          <label>
+            Name
+            <input id="contact-name" type="text" />
+          </label>
+          <label>
+            Company (optional)
+            <input id="contact-company" type="text" />
+          </label>
+          <label>
+            Group (optional)
+            <input id="contact-group" type="text" />
+          </label>
+          <label class="span-two">
+            Custom Fields JSON (optional)
+            <input id="contact-custom-fields" type="text" placeholder='{"title":"Engineer"}' />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="contact-create" type="button">Create Contact</button>
+          <button id="contact-refresh" type="button">Refresh Contacts</button>
+        </div>
+
+        <h3>Bulk Import (JSON array)</h3>
+        <textarea id="contact-import-json" rows="4" placeholder='[{"email":"a@example.com","name":"A"}]'></textarea>
+        <div class="actions">
+          <button id="contact-import" type="button">Import Contacts</button>
+        </div>
+
+        <div id="contacts-table" class="table-wrap"></div>
+      </section>
+
+      <section class="panel" id="templates-panel">
+        <h2>Templates</h2>
+        <div class="grid three">
+          <label>
+            Name
+            <input id="tpl-name" type="text" />
+          </label>
+          <label class="span-two">
+            Subject
+            <input id="tpl-subject" type="text" placeholder="Hi {{name}}" />
+          </label>
+          <label class="span-all">
+            Body HTML
+            <textarea id="tpl-body" rows="4" placeholder="<p>Hello {{name}}</p>"></textarea>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="tpl-create" type="button">Create Template</button>
+          <button id="tpl-refresh" type="button">Refresh Templates</button>
+        </div>
+
+        <div id="templates-table" class="table-wrap"></div>
+      </section>
+
+      <section class="panel" id="campaign-panel">
+        <h2>Campaigns</h2>
+        <div class="grid three">
+          <label>
+            Campaign Name
+            <input id="camp-name" type="text" />
+          </label>
+          <label>
+            Template
+            <select id="camp-template-id"></select>
+          </label>
+          <label>
+            Target Type
+            <select id="camp-target-type">
+              <option value="all_contacts">all_contacts</option>
+              <option value="group_name">group_name</option>
+            </select>
+          </label>
+          <label>
+            Target Group Name
+            <input id="camp-target-group" type="text" />
+          </label>
+          <label>
+            Max Attempts
+            <input id="camp-max-attempts" type="number" min="1" max="20" value="3" />
+          </label>
+        </div>
+        <div class="actions">
+          <button id="camp-create" type="button">Create Draft</button>
+          <button id="camp-refresh" type="button">Refresh Campaigns</button>
+        </div>
+
+        <div class="grid two">
+          <label>
+            Selected Campaign
+            <select id="camp-selected-id"></select>
+          </label>
+          <label>
+            Progress Polling
+            <select id="camp-auto-poll">
+              <option value="off">off</option>
+              <option value="3000">3s</option>
+              <option value="5000">5s</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="camp-queue" type="button">Queue Selected Campaign</button>
+          <button id="camp-progress" type="button">Load Progress</button>
+          <button id="camp-send-jobs" type="button">Load Send Jobs</button>
+          <button id="camp-failures" type="button">Load Recent Failures</button>
+        </div>
+
+        <div id="campaigns-table" class="table-wrap"></div>
+        <div id="campaign-progress" class="kv"></div>
+        <div id="send-jobs-table" class="table-wrap"></div>
+        <div id="failures-table" class="table-wrap"></div>
+      </section>
+
+      <section class="panel" id="events-panel">
+        <h2>Events</h2>
+        <pre id="events"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app/main.js"></script>
+  </body>
+</html>

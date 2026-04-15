@@ -3,6 +3,8 @@ import { and, count, eq, isNull, sql } from "drizzle-orm";
 import {
   campaignCreateDraftInputSchema,
   campaignCreateDraftOutputSchema,
+  campaignListInputSchema,
+  campaignListOutputSchema,
   campaignListRecentFailuresInputSchema,
   campaignListRecentFailuresOutputSchema,
   campaignListSendJobsInputSchema,
@@ -103,6 +105,36 @@ export async function createCampaignDraft(
 
   return campaignCreateDraftOutputSchema.parse({
     campaign: toCampaignDto(createdCampaign),
+  });
+}
+
+export async function listCampaigns(db: Database, input: unknown) {
+  const parsed = campaignListInputSchema.parse(input);
+
+  const whereClause = parsed.status
+    ? and(
+        eq(campaigns.workspaceId, parsed.workspaceId),
+        eq(campaigns.status, parsed.status),
+      )
+    : eq(campaigns.workspaceId, parsed.workspaceId);
+
+  const [items, totalRows] = await Promise.all([
+    db
+      .select()
+      .from(campaigns)
+      .where(whereClause)
+      .orderBy(sql`${campaigns.createdAt} desc`)
+      .limit(parsed.limit)
+      .offset(parsed.offset),
+    db
+      .select({ total: count() })
+      .from(campaigns)
+      .where(whereClause),
+  ]);
+
+  return campaignListOutputSchema.parse({
+    items: items.map((item) => toCampaignDto(item)),
+    total: totalRows[0]?.total ?? 0,
   });
 }
 

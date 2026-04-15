@@ -790,6 +790,97 @@ integration("api protected routes", () => {
     await app.close();
   });
 
+  it("lists campaigns within workspace and supports status filtering", async () => {
+    await insertTemplateFixture(db, {
+      id: "tpl_list_1",
+      workspaceId: "ws_1",
+      name: "Template List 1",
+      subject: "Hello {{name}}",
+      bodyHtml: "<p>Hello {{name}}</p>",
+    });
+    await insertTemplateFixture(db, {
+      id: "tpl_list_2",
+      workspaceId: "ws_2",
+      name: "Template List 2",
+      subject: "Hi {{name}}",
+      bodyHtml: "<p>Hi {{name}}</p>",
+    });
+
+    await insertCampaignFixture(db, {
+      id: "camp_list_ws1_draft",
+      workspaceId: "ws_1",
+      templateId: "tpl_list_1",
+      createdByUserId: "user_1",
+      name: "WS1 Draft",
+      status: "draft",
+      targetType: "all_contacts",
+      targetGroupName: null,
+    });
+    await insertCampaignFixture(db, {
+      id: "camp_list_ws1_queued",
+      workspaceId: "ws_1",
+      templateId: "tpl_list_1",
+      createdByUserId: "user_1",
+      name: "WS1 Queued",
+      status: "queued",
+      targetType: "all_contacts",
+      targetGroupName: null,
+      queuedAt: new Date(),
+    });
+    await insertCampaignFixture(db, {
+      id: "camp_list_ws2_draft",
+      workspaceId: "ws_2",
+      templateId: "tpl_list_2",
+      createdByUserId: "user_2",
+      name: "WS2 Draft",
+      status: "draft",
+      targetType: "all_contacts",
+      targetGroupName: null,
+    });
+
+    const app = createApiApp({
+      services: {
+        db,
+      },
+    });
+    await app.ready();
+
+    const all = await app.inject({
+      method: "GET",
+      url: "/api/campaigns",
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+    });
+    expect(all.statusCode).toBe(200);
+    const allPayload = all.json() as {
+      items: Array<{ id: string; workspaceId: string; status: string }>;
+      total: number;
+    };
+    expect(allPayload.total).toBe(2);
+    expect(allPayload.items.every((item) => item.workspaceId === "ws_1")).toBe(true);
+
+    const queuedOnly = await app.inject({
+      method: "GET",
+      url: "/api/campaigns?status=queued",
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+    });
+    expect(queuedOnly.statusCode).toBe(200);
+    const queuedPayload = queuedOnly.json() as {
+      items: Array<{ id: string; status: string }>;
+      total: number;
+    };
+    expect(queuedPayload.total).toBe(1);
+    expect(queuedPayload.items[0]?.id).toBe("camp_list_ws1_queued");
+    expect(queuedPayload.items[0]?.status).toBe("queued");
+
+    await app.close();
+  });
+
   it("returns recent failed delivery attempts with send job context for operator triage", async () => {
     await insertTemplateFixture(db, {
       id: "tpl_1",

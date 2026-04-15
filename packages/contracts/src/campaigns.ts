@@ -35,6 +35,18 @@ export const campaignCreateDraftOutputSchema = z.object({
   campaign: campaignSchema,
 });
 
+export const campaignListInputSchema = z.object({
+  workspaceId: entityIdSchema,
+  status: campaignStatusSchema.optional(),
+  limit: z.number().int().positive().max(100).default(50),
+  offset: z.number().int().min(0).default(0),
+});
+
+export const campaignListOutputSchema = z.object({
+  items: z.array(campaignSchema),
+  total: z.number().int().min(0),
+});
+
 export const campaignQueueInputSchema = z.object({
   workspaceId: entityIdSchema,
   campaignId: campaignIdSchema,
