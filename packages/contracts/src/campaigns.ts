@@ -94,3 +94,35 @@ export const campaignListSendJobsOutputSchema = z.object({
   items: z.array(campaignSendJobListItemSchema),
   total: z.number().int().min(0),
 });
+
+export const campaignRecentFailureListItemSchema = z.object({
+  deliveryAttemptId: entityIdSchema,
+  sendJobId: entityIdSchema,
+  campaignId: campaignIdSchema,
+  contactId: entityIdSchema,
+  recipientEmail: z.string().email(),
+  recipientName: z.string(),
+  sendJobStatus: sendJobStatusSchema,
+  attemptCount: z.number().int().min(0),
+  maxAttempts: z.number().int().min(1),
+  scheduledAt: isoDateTimeSchema,
+  processedAt: isoDateTimeSchema.optional().nullable(),
+  errorCode: z.string().optional().nullable(),
+  errorMessage: z.string().optional().nullable(),
+  provider: z.string(),
+  providerMessageId: z.string().optional().nullable(),
+  requestedAt: isoDateTimeSchema,
+  completedAt: isoDateTimeSchema,
+});
+
+export const campaignListRecentFailuresInputSchema = z.object({
+  workspaceId: entityIdSchema,
+  campaignId: campaignIdSchema,
+  limit: z.number().int().positive().max(100).default(20),
+  offset: z.number().int().min(0).default(0),
+});
+
+export const campaignListRecentFailuresOutputSchema = z.object({
+  items: z.array(campaignRecentFailureListItemSchema),
+  total: z.number().int().min(0),
+});

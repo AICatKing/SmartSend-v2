@@ -3,6 +3,8 @@ import { and, count, eq, isNull, sql } from "drizzle-orm";
 import {
   campaignCreateDraftInputSchema,
   campaignCreateDraftOutputSchema,
+  campaignListRecentFailuresInputSchema,
+  campaignListRecentFailuresOutputSchema,
   campaignListSendJobsInputSchema,
   campaignListSendJobsOutputSchema,
   campaignProgressInputSchema,
@@ -15,6 +17,7 @@ import {
 import {
   campaigns,
   contacts,
+  deliveryAttempts,
   sendJobs,
   templates,
   type Database,
@@ -384,6 +387,88 @@ export async function listCampaignSendJobs(db: Database, input: unknown) {
         updatedAt: item.updatedAt.toISOString(),
       }),
     ),
+    total: totalRows[0]?.total ?? 0,
+  });
+}
+
+export async function listCampaignRecentFailures(db: Database, input: unknown) {
+  const parsed = campaignListRecentFailuresInputSchema.parse(input);
+
+  const [campaign] = await db
+    .select({ id: campaigns.id })
+    .from(campaigns)
+    .where(
+      and(
+        eq(campaigns.id, parsed.campaignId),
+        eq(campaigns.workspaceId, parsed.workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (!campaign) {
+    throw new AppError("NOT_FOUND", "Campaign not found.");
+  }
+
+  const whereClause = and(
+    eq(sendJobs.workspaceId, parsed.workspaceId),
+    eq(sendJobs.campaignId, parsed.campaignId),
+    eq(deliveryAttempts.status, "failed"),
+  );
+
+  const [items, totalRows] = await Promise.all([
+    db
+      .select({
+        deliveryAttemptId: deliveryAttempts.id,
+        sendJobId: sendJobs.id,
+        campaignId: sendJobs.campaignId,
+        contactId: sendJobs.contactId,
+        recipientEmail: sendJobs.recipientEmail,
+        recipientName: sendJobs.recipientName,
+        sendJobStatus: sendJobs.status,
+        attemptCount: sendJobs.attemptCount,
+        maxAttempts: sendJobs.maxAttempts,
+        scheduledAt: sendJobs.scheduledAt,
+        processedAt: sendJobs.processedAt,
+        errorCode: deliveryAttempts.errorCode,
+        errorMessage: deliveryAttempts.errorMessage,
+        provider: deliveryAttempts.provider,
+        providerMessageId: deliveryAttempts.providerMessageId,
+        requestedAt: deliveryAttempts.requestedAt,
+        completedAt: deliveryAttempts.completedAt,
+      })
+      .from(deliveryAttempts)
+      .innerJoin(sendJobs, eq(sendJobs.id, deliveryAttempts.sendJobId))
+      .where(whereClause)
+      .orderBy(sql`${deliveryAttempts.completedAt} desc`)
+      .limit(parsed.limit)
+      .offset(parsed.offset),
+    db
+      .select({ total: count() })
+      .from(deliveryAttempts)
+      .innerJoin(sendJobs, eq(sendJobs.id, deliveryAttempts.sendJobId))
+      .where(whereClause),
+  ]);
+
+  return campaignListRecentFailuresOutputSchema.parse({
+    items: items.map((item) => ({
+      deliveryAttemptId: item.deliveryAttemptId,
+      sendJobId: item.sendJobId,
+      campaignId: item.campaignId,
+      contactId: item.contactId,
+      recipientEmail: item.recipientEmail,
+      recipientName: item.recipientName,
+      sendJobStatus: item.sendJobStatus,
+      attemptCount: item.attemptCount,
+      maxAttempts: item.maxAttempts,
+      scheduledAt: item.scheduledAt.toISOString(),
+      processedAt: item.processedAt?.toISOString() ?? null,
+      errorCode: item.errorCode,
+      errorMessage: item.errorMessage,
+      provider: item.provider,
+      providerMessageId: item.providerMessageId,
+      requestedAt: item.requestedAt.toISOString(),
+      completedAt: item.completedAt.toISOString(),
+    })),
     total: totalRows[0]?.total ?? 0,
   });
 }

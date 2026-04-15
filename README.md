@@ -194,6 +194,23 @@ Current processing strategy:
 - async truth remains `send_jobs` + `delivery_attempts`
 - this avoids introducing a second audit-based truth for send outcomes
 
+## Projection Queries
+
+Current operator-facing campaign projections are intentionally read-only views derived from database truth:
+
+- `GET /api/campaigns/:campaignId/progress`
+  - aggregated status counts from `send_jobs`
+- `GET /api/campaigns/:campaignId/send-jobs`
+  - current task list from `send_jobs`
+- `GET /api/campaigns/:campaignId/recent-failures`
+  - recent failed attempts from `delivery_attempts` joined with current `send_jobs` context
+
+Boundary:
+
+- these endpoints are projections only
+- they do not define workflow state
+- `campaigns`, `send_jobs`, and `delivery_attempts` remain the system truth
+
 ## Minimal Local Processing Flow
 
 1. Start Postgres.

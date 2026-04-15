@@ -5,6 +5,7 @@ import {
   campaigns,
   contacts,
   createDatabase,
+  deliveryAttempts,
   insertCampaignFixture,
   insertContactFixture,
   insertTemplateFixture,
@@ -785,6 +786,160 @@ integration("api protected routes", () => {
     const jobsPayload = jobs.json() as { items: Array<{ id: string }>; total: number };
     expect(jobsPayload.total).toBe(2);
     expect(jobsPayload.items).toHaveLength(2);
+
+    await app.close();
+  });
+
+  it("returns recent failed delivery attempts with send job context for operator triage", async () => {
+    await insertTemplateFixture(db, {
+      id: "tpl_1",
+      workspaceId: "ws_1",
+      name: "Welcome",
+      subject: "Hi {{name}}",
+      bodyHtml: "<p>{{name}}</p>",
+    });
+
+    await insertContactFixture(db, {
+      id: "c_1",
+      workspaceId: "ws_1",
+      email: "alice@example.com",
+      name: "Alice",
+      customFields: {},
+    });
+    await insertContactFixture(db, {
+      id: "c_2",
+      workspaceId: "ws_1",
+      email: "bob@example.com",
+      name: "Bob",
+      customFields: {},
+    });
+
+    await insertCampaignFixture(db, {
+      id: "campaign_failures",
+      workspaceId: "ws_1",
+      templateId: "tpl_1",
+      createdByUserId: "user_1",
+      name: "Failure Campaign",
+      status: "processing",
+      targetType: "all_contacts",
+      targetGroupName: null,
+      queuedAt: new Date(),
+    });
+
+    await db.insert(sendJobs).values([
+      {
+        id: "send_job_failed_terminal",
+        workspaceId: "ws_1",
+        campaignId: "campaign_failures",
+        contactId: "c_1",
+        recipientEmail: "alice@example.com",
+        recipientName: "Alice",
+        renderedSubject: "Hello",
+        renderedBody: "<p>Hello</p>",
+        status: "failed",
+        attemptCount: 3,
+        maxAttempts: 3,
+        scheduledAt: new Date(Date.now() - 60_000),
+        lockedAt: null,
+        lockedBy: null,
+        processedAt: new Date("2026-04-15T07:00:00.000Z"),
+        lastErrorCode: "INVALID_RECIPIENT",
+        lastErrorMessage: "Permanent failure",
+        provider: "resend",
+        providerMessageId: null,
+      },
+      {
+        id: "send_job_pending_retry",
+        workspaceId: "ws_1",
+        campaignId: "campaign_failures",
+        contactId: "c_2",
+        recipientEmail: "bob@example.com",
+        recipientName: "Bob",
+        renderedSubject: "Hello",
+        renderedBody: "<p>Hello</p>",
+        status: "pending",
+        attemptCount: 1,
+        maxAttempts: 3,
+        scheduledAt: new Date("2026-04-15T08:00:00.000Z"),
+        lockedAt: null,
+        lockedBy: null,
+        processedAt: null,
+        lastErrorCode: "RATE_LIMIT",
+        lastErrorMessage: "Transient failure",
+        provider: "resend",
+        providerMessageId: null,
+      },
+    ]);
+
+    await db.insert(deliveryAttempts).values([
+      {
+        id: "attempt_old",
+        workspaceId: "ws_1",
+        sendJobId: "send_job_failed_terminal",
+        provider: "resend",
+        providerMessageId: null,
+        status: "failed",
+        errorCode: "INVALID_RECIPIENT",
+        errorMessage: "Permanent failure",
+        requestPayloadJson: {},
+        responsePayloadJson: {},
+        requestedAt: new Date("2026-04-15T06:59:00.000Z"),
+        completedAt: new Date("2026-04-15T07:00:00.000Z"),
+      },
+      {
+        id: "attempt_new",
+        workspaceId: "ws_1",
+        sendJobId: "send_job_pending_retry",
+        provider: "resend",
+        providerMessageId: null,
+        status: "failed",
+        errorCode: "RATE_LIMIT",
+        errorMessage: "Transient failure",
+        requestPayloadJson: {},
+        responsePayloadJson: {},
+        requestedAt: new Date("2026-04-15T07:09:00.000Z"),
+        completedAt: new Date("2026-04-15T07:10:00.000Z"),
+      },
+    ]);
+
+    const app = createApiApp({
+      services: {
+        db,
+      },
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/campaigns/campaign_failures/recent-failures",
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as {
+      items: Array<{
+        completedAt: string;
+        deliveryAttemptId: string;
+        errorCode: string | null;
+        recipientEmail: string;
+        sendJobId: string;
+        sendJobStatus: string;
+      }>;
+      total: number;
+    };
+
+    expect(payload.total).toBe(2);
+    expect(payload.items).toHaveLength(2);
+    expect(payload.items[0]?.deliveryAttemptId).toBe("attempt_new");
+    expect(payload.items[0]?.sendJobId).toBe("send_job_pending_retry");
+    expect(payload.items[0]?.sendJobStatus).toBe("pending");
+    expect(payload.items[0]?.errorCode).toBe("RATE_LIMIT");
+    expect(payload.items[0]?.recipientEmail).toBe("bob@example.com");
+    expect(payload.items[1]?.deliveryAttemptId).toBe("attempt_old");
+    expect(payload.items[1]?.sendJobStatus).toBe("failed");
 
     await app.close();
   });

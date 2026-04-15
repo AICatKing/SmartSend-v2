@@ -123,6 +123,7 @@ updated: 2026-04-14
 - 无可 claim 的 `pending` job 时 consumer poll 是显式 no-op
 - Campaign 聚合状态按任务结果刷新
 - cron 补偿能恢复超时卡住的 `processing` 任务
+- 关键 projection 查询与 `send_jobs` / `delivery_attempts` 事实层一致
 
 通过标准：
 

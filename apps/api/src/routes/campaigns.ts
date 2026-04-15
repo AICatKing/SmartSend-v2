@@ -3,6 +3,7 @@ import { AppError } from "@smartsend/shared";
 import {
   createCampaignDraft,
   getCampaignProgress,
+  listCampaignRecentFailures,
   listCampaignSendJobs,
   queueCampaign,
 } from "@smartsend/domain";
@@ -94,6 +95,22 @@ export async function registerCampaignRoutes(
       const query = (request.query ?? {}) as Record<string, unknown>;
 
       return listCampaignSendJobs(app.services.requireDatabase(), {
+        workspaceId: request.apiContext.currentWorkspaceId,
+        campaignId: params.campaignId,
+        limit: query.limit,
+        offset: query.offset,
+      });
+    },
+  );
+
+  app.get(
+    "/api/campaigns/:campaignId/recent-failures",
+    { preHandler: requireApiContext },
+    async (request) => {
+      const params = request.params as { campaignId: string };
+      const query = (request.query ?? {}) as Record<string, unknown>;
+
+      return listCampaignRecentFailures(app.services.requireDatabase(), {
         workspaceId: request.apiContext.currentWorkspaceId,
         campaignId: params.campaignId,
         limit: query.limit,
