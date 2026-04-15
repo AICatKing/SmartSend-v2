@@ -34,6 +34,7 @@ export async function claimSendJobForProcessing(db: Database, input: unknown) {
       where status = 'pending'
         and scheduled_at <= now()
         and locked_at is null
+        ${parsed.sendJobId ? sql`and id = ${parsed.sendJobId}` : sql``}
         ${parsed.workspaceId ? sql`and workspace_id = ${parsed.workspaceId}` : sql``}
       order by scheduled_at asc, created_at asc
       limit 1

@@ -39,5 +39,6 @@ export const processSendJobInputSchema = z.object({
 
 export const claimSendJobInputSchema = z.object({
   lockedBy: z.string().min(1).max(120),
+  sendJobId: entityIdSchema.optional(),
   workspaceId: entityIdSchema.optional(),
 });

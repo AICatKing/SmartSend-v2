@@ -1,4 +1,5 @@
 import { createDatabase } from "@smartsend/db";
+import { sendJobQueueMessageSchema, type SendJobQueueMessage } from "@smartsend/contracts";
 import {
   claimSendJobForProcessing,
   processSendJob,
@@ -29,22 +30,27 @@ export type ConsumerHandlerEvent = {
   messageCount: number;
 };
 
+export type SendJobQueueMessageEvent = {
+  message: SendJobQueueMessage;
+  source: "local-shim" | "vercel-queue";
+};
+
+export type SendJobQueueMessageResult =
+  | {
+      disposition: "processed";
+      finalStatus: "cancelled" | "failed" | "pending" | "processing" | "sent";
+      sendJobId: string;
+    }
+  | {
+      disposition: "skipped";
+      reason: "not_claimable";
+      sendJobId: string;
+    };
+
 export async function handleConsumerEvent(
   event: ConsumerHandlerEvent,
 ): Promise<ConsumerProcessingSummary> {
-  if (!localAsyncShimEnv.DATABASE_URL) {
-    throw new ConfigError("DATABASE_URL is required for the consumer handler.");
-  }
-
-  if (!localAsyncShimEnv.API_ENCRYPTION_KEY) {
-    throw new ConfigError("API_ENCRYPTION_KEY is required for the consumer handler.");
-  }
-
-  const { client, db } = createDatabase(localAsyncShimEnv.DATABASE_URL);
-  const providerAdapter = createResendProviderAdapter({
-    mode: localAsyncShimEnv.PROVIDER_MODE,
-    secretBox: createSecretBox(localAsyncShimEnv.API_ENCRYPTION_KEY),
-  });
+  const { client, db, providerAdapter } = createConsumerContext();
   const maxClaims = Math.max(1, event.messageCount);
 
   let claimedCount = 0;
@@ -119,4 +125,86 @@ export async function handleConsumerEvent(
   } finally {
     await client.end();
   }
+}
+
+export async function handleSendJobQueueMessage(
+  event: SendJobQueueMessageEvent,
+): Promise<SendJobQueueMessageResult> {
+  const parsedMessage = sendJobQueueMessageSchema.parse(event.message);
+  const { client, db, providerAdapter } = createConsumerContext();
+
+  try {
+    const lockedBy = `${consumerHandlerServiceId}:${event.source}:${crypto.randomUUID()}`;
+    const claimed = await claimSendJobForProcessing(db, {
+      lockedBy,
+      sendJobId: parsedMessage.sendJobId,
+    });
+
+    if (!claimed) {
+      logger.info(
+        {
+          service: consumerHandlerServiceId,
+          source: event.source,
+          sendJobId: parsedMessage.sendJobId,
+          messageKind: parsedMessage.kind,
+          messageVersion: parsedMessage.version,
+        },
+        "Queue message was skipped because the referenced send job was not claimable.",
+      );
+
+      return {
+        disposition: "skipped",
+        reason: "not_claimable",
+        sendJobId: parsedMessage.sendJobId,
+      };
+    }
+
+    const result = await processSendJob(db, {
+      sendJobId: claimed.id,
+      lockedBy,
+      providerAdapter,
+    });
+
+    logger.info(
+      {
+        service: consumerHandlerServiceId,
+        source: event.source,
+        sendJobId: parsedMessage.sendJobId,
+        messageKind: parsedMessage.kind,
+        messageVersion: parsedMessage.version,
+        finalStatus: result.finalStatus,
+      },
+      "Queue message consumer processed a referenced send job.",
+    );
+
+    return {
+      disposition: "processed",
+      sendJobId: parsedMessage.sendJobId,
+      finalStatus: result.finalStatus,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+function createConsumerContext() {
+  if (!localAsyncShimEnv.DATABASE_URL) {
+    throw new ConfigError("DATABASE_URL is required for the consumer handler.");
+  }
+
+  if (!localAsyncShimEnv.API_ENCRYPTION_KEY) {
+    throw new ConfigError("API_ENCRYPTION_KEY is required for the consumer handler.");
+  }
+
+  const { client, db } = createDatabase(localAsyncShimEnv.DATABASE_URL);
+  const providerAdapter = createResendProviderAdapter({
+    mode: localAsyncShimEnv.PROVIDER_MODE,
+    secretBox: createSecretBox(localAsyncShimEnv.API_ENCRYPTION_KEY),
+  });
+
+  return {
+    client,
+    db,
+    providerAdapter,
+  };
 }

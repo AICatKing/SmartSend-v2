@@ -27,7 +27,7 @@ import { AppError, createSecretBox } from "@smartsend/shared";
 
 import { createLocalAsyncShimApp } from "./app.js";
 import { createResendProviderAdapter } from "./provider/resend-adapter.js";
-import { handleConsumerEvent } from "./queue/consumer-handler.js";
+import { handleConsumerEvent, handleSendJobQueueMessage } from "./queue/consumer-handler.js";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const hasDatabase = Boolean(DATABASE_URL);
@@ -140,6 +140,73 @@ integration("worker processing integration", () => {
       .where(eq(campaigns.id, "campaign_1"))
       .limit(1);
     expect(campaign?.status).toBe("completed");
+  });
+
+  it("processes one explicit send job queue message without relying on poll semantics", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_queue_message",
+    });
+
+    const result = await handleSendJobQueueMessage({
+      source: "vercel-queue",
+      message: {
+        version: 1,
+        kind: "send_job.process",
+        sendJobId: "send_job_queue_message",
+      },
+    });
+
+    expect(result).toEqual({
+      disposition: "processed",
+      sendJobId: "send_job_queue_message",
+      finalStatus: "sent",
+    });
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_queue_message"))
+      .limit(1);
+    expect(job?.status).toBe("sent");
+  });
+
+  it("skips one explicit send job queue message when the referenced job is not claimable", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_queue_message_skip",
+    });
+
+    await db
+      .update(sendJobs)
+      .set({
+        scheduledAt: new Date(Date.now() + 10 * 60 * 1000),
+        updatedAt: new Date(),
+      })
+      .where(eq(sendJobs.id, "send_job_queue_message_skip"));
+
+    const result = await handleSendJobQueueMessage({
+      source: "vercel-queue",
+      message: {
+        version: 1,
+        kind: "send_job.process",
+        sendJobId: "send_job_queue_message_skip",
+      },
+    });
+
+    expect(result).toEqual({
+      disposition: "skipped",
+      reason: "not_claimable",
+      sendJobId: "send_job_queue_message_skip",
+    });
+
+    const attempts = await db
+      .select()
+      .from(deliveryAttempts)
+      .where(eq(deliveryAttempts.sendJobId, "send_job_queue_message_skip"));
+    expect(attempts).toHaveLength(0);
   });
 
   it("schedules the first retryable failure into the future and keeps it unclaimable until due", async () => {

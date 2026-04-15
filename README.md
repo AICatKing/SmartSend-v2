@@ -92,6 +92,13 @@ curl http://127.0.0.1:3001/health
 
 `apps/worker` is still a development shim, not a production deployment unit. It mirrors the future queue-consumer and cron-handler boundaries while using the real database facts layer.
 
+Queue ingress boundary:
+
+- stable queue message contract is `version + kind + sendJobId`
+- queue messages are only processing hints, not database truth
+- current local shim exposes a polling development entry
+- future Vercel queue consumer should map one queue message to one `send_job` processing attempt
+
 ## Manually Trigger One Consumer Poll
 
 Development-only internal route:

@@ -1,4 +1,5 @@
 import { createLogger } from "@smartsend/shared";
+import { sendJobQueueMessageSchema, type SendJobQueueMessage } from "@smartsend/contracts";
 import {
   asyncDeploymentModel,
   asyncExecutionBackend,
@@ -12,19 +13,19 @@ const logger = createLogger({
   level: localAsyncShimEnv.LOG_LEVEL,
 });
 
-export type QueuePublishMessage = {
-  kind: "send-job";
-  jobId: string;
-};
+export type QueuePublishMessage = SendJobQueueMessage;
 
 export async function publishToAsyncQueue(message: QueuePublishMessage) {
+  const parsed = sendJobQueueMessageSchema.parse(message);
+
   logger.info(
     {
       deploymentModel: asyncDeploymentModel,
       executionBackend: asyncExecutionBackend,
       provider: primaryProvider,
-      messageKind: message.kind,
-      jobId: message.jobId,
+      messageKind: parsed.kind,
+      messageVersion: parsed.version,
+      sendJobId: parsed.sendJobId,
     },
     "Queue producer adapter recorded a local publish event. Real Vercel Queues delivery is still pending a later work package.",
   );
