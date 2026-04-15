@@ -148,6 +148,14 @@ updated: 2026-04-14
 - Campaign 创建 / 启动 / 暂停 / 取消
 - 发件配置修改
 
+当前 Phase 1 audit 策略：
+
+- API 侧关键资源写操作写入 `audit_logs`
+- 当前明确覆盖：`contact`、`template`、`campaign`、`workspace_sending_config`
+- processing / retry / recovery 主链路当前不额外写 `audit_logs`
+- 这些异步状态变化以 `send_jobs` 与 `delivery_attempts` 作为 truth layer，避免再造一份与事实层冲突的第二真相
+- 若未来出现“人工触发重试 / 人工取消 / 人工恢复”这类 operator action，再单独评估是否进入 `audit_logs`
+
 通过标准：
 
 - `audit_logs` 至少记录 `workspaceId`、`actorUserId`、`action`、`targetType`、`targetId`

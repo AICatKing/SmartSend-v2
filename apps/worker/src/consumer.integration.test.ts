@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import {
+  auditLogs,
   campaigns,
   createDatabase,
   deliveryAttempts,
@@ -140,6 +141,9 @@ integration("worker processing integration", () => {
       .where(eq(campaigns.id, "campaign_1"))
       .limit(1);
     expect(campaign?.status).toBe("completed");
+
+    const audits = await db.select().from(auditLogs);
+    expect(audits).toHaveLength(0);
   });
 
   it("processes one explicit send job queue message without relying on poll semantics", async () => {

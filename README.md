@@ -179,6 +179,21 @@ Boundary with recovery:
 - `locked_at` timeout recovery answers "what to do with a job stuck in processing"
 - they are complementary mechanisms, not one merged mechanism
 
+## Audit Coverage
+
+Current Phase 1 audit coverage is intentionally focused on control-plane writes:
+
+- `contact.create` / `contact.update` / `contact.remove` / `contact.import`
+- `template.create` / `template.update` / `template.remove`
+- `campaign.createDraft` / `campaign.queueCampaign` / `campaign.queueCampaign.failed`
+- `workspace_sending_config.upsert`
+
+Current processing strategy:
+
+- processing / retry / recovery state transitions do not write extra `audit_logs`
+- async truth remains `send_jobs` + `delivery_attempts`
+- this avoids introducing a second audit-based truth for send outcomes
+
 ## Minimal Local Processing Flow
 
 1. Start Postgres.

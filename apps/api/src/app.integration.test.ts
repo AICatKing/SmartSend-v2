@@ -249,6 +249,185 @@ integration("api protected routes", () => {
     const getPayload = get.json() as { config: { hasApiKey: boolean } | null };
     expect(getPayload.config?.hasApiKey).toBe(true);
 
+    const [audit] = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, "workspace_sending_config.upsert"))
+      .limit(1);
+    expect(audit?.workspaceId).toBe("ws_1");
+    expect(audit?.actorUserId).toBe("user_1");
+    expect(audit?.targetType).toBe("workspace_sending_config");
+    expect(audit?.targetId).toBe("ws_1");
+
+    await app.close();
+  });
+
+  it("writes audit logs for contact create, update, remove, and import", async () => {
+    const app = createApiApp({
+      services: {
+        db,
+      },
+    });
+    await app.ready();
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/contacts",
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+      payload: {
+        email: "new-contact@example.com",
+        name: "New Contact",
+      },
+    });
+    expect(create.statusCode).toBe(200);
+    const createdContactId = (create.json() as { contact: { id: string } }).contact.id;
+
+    const update = await app.inject({
+      method: "PATCH",
+      url: `/api/contacts/${createdContactId}`,
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+      payload: {
+        name: "Updated Contact",
+      },
+    });
+    expect(update.statusCode).toBe(200);
+
+    const remove = await app.inject({
+      method: "DELETE",
+      url: `/api/contacts/${createdContactId}`,
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+    });
+    expect(remove.statusCode).toBe(200);
+
+    const imported = await app.inject({
+      method: "POST",
+      url: "/api/contacts/import",
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+      payload: {
+        contacts: [
+          {
+            email: "imported-a@example.com",
+            name: "Imported A",
+          },
+          {
+            email: "imported-b@example.com",
+            name: "Imported B",
+          },
+        ],
+      },
+    });
+    expect(imported.statusCode).toBe(200);
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.workspaceId, "ws_1"));
+
+    const createAudit = audits.find((row) => row.action === "contact.create");
+    expect(createAudit?.actorUserId).toBe("user_1");
+    expect(createAudit?.targetType).toBe("contact");
+    expect(createAudit?.targetId).toBe(createdContactId);
+
+    const updateAudit = audits.find((row) => row.action === "contact.update");
+    expect(updateAudit?.actorUserId).toBe("user_1");
+    expect(updateAudit?.targetType).toBe("contact");
+    expect(updateAudit?.targetId).toBe(createdContactId);
+
+    const removeAudit = audits.find((row) => row.action === "contact.remove");
+    expect(removeAudit?.actorUserId).toBe("user_1");
+    expect(removeAudit?.targetType).toBe("contact");
+    expect(removeAudit?.targetId).toBe(createdContactId);
+
+    const importAudit = audits.find((row) => row.action === "contact.import");
+    expect(importAudit?.actorUserId).toBe("user_1");
+    expect(importAudit?.targetType).toBe("contact_batch");
+    expect(importAudit?.targetId).toBeNull();
+    expect(importAudit?.metadata).toMatchObject({
+      importedCount: 2,
+    });
+
+    await app.close();
+  });
+
+  it("writes audit logs for template create, update, and remove", async () => {
+    const app = createApiApp({
+      services: {
+        db,
+      },
+    });
+    await app.ready();
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/templates",
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+      payload: {
+        name: "Audit Template",
+        subject: "Hello",
+        bodyHtml: "<p>Hello</p>",
+      },
+    });
+    expect(create.statusCode).toBe(200);
+    const templateId = (create.json() as { template: { id: string } }).template.id;
+
+    const update = await app.inject({
+      method: "PATCH",
+      url: `/api/templates/${templateId}`,
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+      payload: {
+        subject: "Updated Subject",
+      },
+    });
+    expect(update.statusCode).toBe(200);
+
+    const remove = await app.inject({
+      method: "DELETE",
+      url: `/api/templates/${templateId}`,
+      headers: {
+        "x-dev-user-id": "user_1",
+        "x-dev-workspace-id": "ws_1",
+      },
+    });
+    expect(remove.statusCode).toBe(200);
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.workspaceId, "ws_1"));
+
+    const createAudit = audits.find((row) => row.action === "template.create");
+    expect(createAudit?.actorUserId).toBe("user_1");
+    expect(createAudit?.targetType).toBe("template");
+    expect(createAudit?.targetId).toBe(templateId);
+
+    const updateAudit = audits.find((row) => row.action === "template.update");
+    expect(updateAudit?.actorUserId).toBe("user_1");
+    expect(updateAudit?.targetType).toBe("template");
+    expect(updateAudit?.targetId).toBe(templateId);
+
+    const removeAudit = audits.find((row) => row.action === "template.remove");
+    expect(removeAudit?.actorUserId).toBe("user_1");
+    expect(removeAudit?.targetType).toBe("template");
+    expect(removeAudit?.targetId).toBe(templateId);
+
     await app.close();
   });
 
@@ -503,6 +682,10 @@ integration("api protected routes", () => {
       .from(auditLogs)
       .where(eq(auditLogs.action, "campaign.queueCampaign.failed"));
     expect(failureAudits.length).toBeGreaterThan(0);
+    expect(failureAudits[0]?.workspaceId).toBe("ws_1");
+    expect(failureAudits[0]?.actorUserId).toBe("user_1");
+    expect(failureAudits[0]?.targetType).toBe("campaign");
+    expect(failureAudits[0]?.targetId).toBe(campaignId);
 
     await app.close();
   });
