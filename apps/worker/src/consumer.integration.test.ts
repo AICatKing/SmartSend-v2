@@ -2,14 +2,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import {
   campaigns,
-  contacts,
   createDatabase,
   deliveryAttempts,
+  insertCampaignFixture,
+  insertContactFixture,
+  insertSendJobFixture,
+  insertTemplateFixture,
+  insertWorkspaceSendingConfigFixture,
+  resetIntegrationTestDatabase,
   sendJobs,
-  templates,
-  users,
-  workspaceSendingConfigs,
-  workspaces,
+  seedWorkspaceMembershipFixture,
   type Database,
 } from "@smartsend/db";
 import type { ProviderAdapter } from "@smartsend/domain";
@@ -21,9 +23,11 @@ import {
   recoveryPendingErrorCode,
   sendJobRetryBaseDelayMs,
 } from "@smartsend/domain";
-import { createSecretBox } from "@smartsend/shared";
+import { AppError, createSecretBox } from "@smartsend/shared";
 
 import { createLocalAsyncShimApp } from "./app.js";
+import { createResendProviderAdapter } from "./provider/resend-adapter.js";
+import { handleConsumerEvent } from "./queue/consumer-handler.js";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const hasDatabase = Boolean(DATABASE_URL);
@@ -45,14 +49,7 @@ integration("worker processing integration", () => {
   });
 
   beforeEach(async () => {
-    await db.delete(deliveryAttempts);
-    await db.delete(workspaceSendingConfigs);
-    await db.delete(sendJobs);
-    await db.delete(campaigns);
-    await db.delete(contacts);
-    await db.delete(templates);
-    await db.delete(workspaces);
-    await db.delete(users);
+    await resetIntegrationTestDatabase(db);
   });
 
   it("claims a pending send job only once across concurrent workers", async () => {
@@ -307,11 +304,12 @@ integration("worker processing integration", () => {
     expect(attempts.every((attempt) => attempt.status === "failed")).toBe(true);
   });
 
-  it("schedules unknown failures with the same backoff policy and fails them once max attempts are exhausted", async () => {
+  it("uses the mock provider unknown classification as retryable-with-backoff until max attempts are exhausted", async () => {
     await seedScenario({
       db,
       includeSendingConfig: true,
       sendJobId: "send_job_unknown",
+      recipientEmail: "person-unknown@example.com",
     });
 
     await claimSendJobForProcessing(db, {
@@ -319,18 +317,15 @@ integration("worker processing integration", () => {
     });
 
     const startedAt = Date.now();
+    const mockProviderAdapter = createResendProviderAdapter({
+      mode: "mock",
+      secretBox: createSecretBox(TEST_API_ENCRYPTION_KEY),
+    });
 
     const firstResult = await processSendJob(db, {
       sendJobId: "send_job_unknown",
       lockedBy: "worker-unknown-first",
-      providerAdapter: createAdapter({
-        ok: false,
-        provider: "resend",
-        classification: "unknown",
-        errorCode: "PROVIDER_UNCLEAR_STATE",
-        errorMessage: "Provider returned an unclear state.",
-        responsePayloadJson: { accepted: false },
-      }),
+      providerAdapter: mockProviderAdapter,
     });
 
     expect(firstResult.finalStatus).toBe("pending");
@@ -347,6 +342,14 @@ integration("worker processing integration", () => {
     expect(afterFirst?.scheduledAt!.getTime()).toBeGreaterThanOrEqual(
       startedAt + sendJobRetryBaseDelayMs,
     );
+    expect(afterFirst?.lastErrorCode).toBe("MOCK_UNKNOWN");
+
+    const [firstAttempt] = await db
+      .select()
+      .from(deliveryAttempts)
+      .where(eq(deliveryAttempts.sendJobId, "send_job_unknown"))
+      .limit(1);
+    expect(firstAttempt?.errorCode).toBe("MOCK_UNKNOWN");
 
     await db
       .update(sendJobs)
@@ -364,14 +367,7 @@ integration("worker processing integration", () => {
     const secondResult = await processSendJob(db, {
       sendJobId: "send_job_unknown",
       lockedBy: "worker-unknown-terminal",
-      providerAdapter: createAdapter({
-        ok: false,
-        provider: "resend",
-        classification: "unknown",
-        errorCode: "PROVIDER_UNCLEAR_STATE",
-        errorMessage: "Provider returned an unclear state.",
-        responsePayloadJson: { accepted: false },
-      }),
+      providerAdapter: mockProviderAdapter,
     });
 
     expect(secondResult.finalStatus).toBe("failed");
@@ -385,6 +381,7 @@ integration("worker processing integration", () => {
     expect(afterSecond?.status).toBe("failed");
     expect(afterSecond?.attemptCount).toBe(3);
     expect(afterSecond?.processedAt).not.toBeNull();
+    expect(afterSecond?.lastErrorCode).toBe("MOCK_UNKNOWN");
 
     const attempts = await db
       .select()
@@ -392,6 +389,101 @@ integration("worker processing integration", () => {
       .where(eq(deliveryAttempts.sendJobId, "send_job_unknown"));
     expect(attempts).toHaveLength(2);
     expect(attempts.every((attempt) => attempt.status === "failed")).toBe(true);
+  });
+
+  it("rejects duplicate processing of the same send job after it has already been completed", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_duplicate_process",
+    });
+
+    await claimSendJobForProcessing(db, {
+      lockedBy: "worker-duplicate-process",
+    });
+
+    const firstResult = await processSendJob(db, {
+      sendJobId: "send_job_duplicate_process",
+      lockedBy: "worker-duplicate-process",
+      providerAdapter: createAdapter({
+        ok: true,
+        provider: "resend",
+        providerMessageId: "provider_msg_duplicate",
+        responsePayloadJson: { accepted: true },
+      }),
+    });
+
+    expect(firstResult.finalStatus).toBe("sent");
+
+    await expect(
+      processSendJob(db, {
+        sendJobId: "send_job_duplicate_process",
+        lockedBy: "worker-duplicate-process",
+        providerAdapter: {
+          async send() {
+            throw new Error("provider should not be called on duplicate process");
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    } satisfies Partial<AppError>);
+
+    const attempts = await db
+      .select()
+      .from(deliveryAttempts)
+      .where(eq(deliveryAttempts.sendJobId, "send_job_duplicate_process"));
+    expect(attempts).toHaveLength(1);
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_duplicate_process"))
+      .limit(1);
+    expect(job?.status).toBe("sent");
+    expect(job?.attemptCount).toBe(1);
+  });
+
+  it("returns a no-op summary when consumer polling finds no pending jobs", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_future_pending",
+    });
+
+    await db
+      .update(sendJobs)
+      .set({
+        scheduledAt: new Date(Date.now() + 10 * 60 * 1000),
+        updatedAt: new Date(),
+      })
+      .where(eq(sendJobs.id, "send_job_future_pending"));
+
+    const summary = await handleConsumerEvent({
+      source: "local-shim",
+      messageCount: 1,
+    });
+
+    expect(summary.claimedCount).toBe(0);
+    expect(summary.sentCount).toBe(0);
+    expect(summary.failedCount).toBe(0);
+    expect(summary.requeuedCount).toBe(0);
+    expect(summary.providerMode).toBe("mock");
+
+    const attempts = await db
+      .select()
+      .from(deliveryAttempts)
+      .where(eq(deliveryAttempts.sendJobId, "send_job_future_pending"));
+    expect(attempts).toHaveLength(0);
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_future_pending"))
+      .limit(1);
+    expect(job?.status).toBe("pending");
+    expect(job?.lockedAt).toBeNull();
+    expect(job?.lockedBy).toBeNull();
   });
 
   it("writes delivery attempt and marks send job failed for non-retryable failure", async () => {
@@ -810,18 +902,24 @@ async function seedScenario({
 }) {
   const now = new Date();
 
-  await db.insert(users).values({
-    id: "user_1",
-    email: "user1@example.com",
-    name: "User One",
+  await seedWorkspaceMembershipFixture(db, {
+    users: [
+      {
+        id: "user_1",
+        email: "user1@example.com",
+        name: "User One",
+      },
+    ],
+    workspaces: [
+      {
+        id: "ws_1",
+        name: "Workspace One",
+      },
+    ],
+    memberships: [],
   });
 
-  await db.insert(workspaces).values({
-    id: "ws_1",
-    name: "Workspace One",
-  });
-
-  await db.insert(templates).values({
+  await insertTemplateFixture(db, {
     id: "tpl_1",
     workspaceId: "ws_1",
     name: "Template One",
@@ -829,7 +927,7 @@ async function seedScenario({
     bodyHtml: "<p>Hello</p>",
   });
 
-  await db.insert(contacts).values({
+  await insertContactFixture(db, {
     id: "contact_1",
     workspaceId: "ws_1",
     email: recipientEmail,
@@ -837,7 +935,7 @@ async function seedScenario({
     customFields: {},
   });
 
-  await db.insert(campaigns).values({
+  await insertCampaignFixture(db, {
     id: "campaign_1",
     workspaceId: "ws_1",
     templateId: "tpl_1",
@@ -849,7 +947,7 @@ async function seedScenario({
     queuedAt: now,
   });
 
-  await db.insert(sendJobs).values({
+  await insertSendJobFixture(db, {
     id: sendJobId,
     workspaceId: "ws_1",
     campaignId: "campaign_1",
@@ -874,7 +972,7 @@ async function seedScenario({
   if (includeSendingConfig) {
     const secretBox = createSecretBox(TEST_API_ENCRYPTION_KEY);
 
-    await db.insert(workspaceSendingConfigs).values({
+    await insertWorkspaceSendingConfigFixture(db, {
       workspaceId: "ws_1",
       provider: "resend",
       fromEmail: "sender@example.com",
@@ -902,7 +1000,7 @@ async function insertSendJob(
   },
 ) {
   if (input.contactId !== "contact_1") {
-    await db.insert(contacts).values({
+    await insertContactFixture(db, {
       id: input.contactId,
       workspaceId: "ws_1",
       email: input.recipientEmail,
@@ -911,7 +1009,7 @@ async function insertSendJob(
     });
   }
 
-  await db.insert(sendJobs).values({
+  await insertSendJobFixture(db, {
     id: input.id,
     workspaceId: "ws_1",
     campaignId: "campaign_1",

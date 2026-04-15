@@ -37,6 +37,34 @@ updated: 2026-04-14
 - workspace 级原生命令仍可直接运行，但若未显式提供 `DATABASE_URL` 仍会 skip
 - `apps/api` 与 `apps/worker` 当前不应并行打到同一个测试库，因为两侧测试都采用全表清理策略
 
+## 共享测试 Helper
+
+共享 helper 当前位于：
+
+- `packages/db/src/testing.ts`
+
+当前已收敛的最小公共部分：
+
+- `resetIntegrationTestDatabase`
+- `seedWorkspaceMembershipFixture`
+- `insertTemplateFixture`
+- `insertContactFixture`
+- `insertCampaignFixture`
+- `insertSendJobFixture`
+- `insertWorkspaceSendingConfigFixture`
+
+推荐用法：
+
+- 在 API / worker / future cron 的真实数据库测试里，优先复用这些 helper 做 cleanup 和稳定重复出现的数据准备
+- helper 应只负责“把明确的数据插进去”，不要在 helper 内隐藏复杂业务流程
+- 测试文件里仍应保留场景本身的可读性，例如一个 campaign 需要哪些 contact、哪个 send_job 处于什么状态，应直接在测试里写清楚
+
+适用边界：
+
+- 这些 helper 服务当前 PostgreSQL integration tests
+- 它们不是新的测试框架，也不是通用 factory system
+- 如果某类 seed 模式还只出现一两次，不应急着继续抽象
+
 ## 第一阶段必须验证的系统不变量
 
 - 同一个 `send_job` 任一时刻只能有一个活跃处理流程
@@ -90,6 +118,9 @@ updated: 2026-04-14
 - 成功发送后写入 `delivery_attempts`
 - 可重试错误进入重新调度
 - 不可重试错误进入终态失败
+- `unknown` provider 分类按“可重试但受上限约束”处理
+- 同一 `send_job` 重复 `process` 调用不会重复发送
+- 无可 claim 的 `pending` job 时 consumer poll 是显式 no-op
 - Campaign 聚合状态按任务结果刷新
 - cron 补偿能恢复超时卡住的 `processing` 任务
 

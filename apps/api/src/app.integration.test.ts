@@ -5,12 +5,12 @@ import {
   campaigns,
   contacts,
   createDatabase,
+  insertCampaignFixture,
+  insertContactFixture,
+  insertTemplateFixture,
+  resetIntegrationTestDatabase,
   sendJobs,
-  templates,
-  users,
-  workspaceMembers,
-  workspaces,
-  workspaceSendingConfigs,
+  seedWorkspaceMembershipFixture,
 } from "@smartsend/db";
 
 import { createApiApp } from "./app.js";
@@ -33,52 +33,43 @@ integration("api protected routes", () => {
   });
 
   beforeEach(async () => {
-    await db.delete(auditLogs);
-    await db.delete(workspaceSendingConfigs);
-    await db.delete(sendJobs);
-    await db.delete(campaigns);
-    await db.delete(contacts);
-    await db.delete(templates);
-    await db.delete(workspaceMembers);
-    await db.delete(workspaces);
-    await db.delete(users);
-
-    await db.insert(users).values([
-      {
-        id: "user_1",
-        email: "user1@example.com",
-        name: "User One",
-      },
-      {
-        id: "user_2",
-        email: "user2@example.com",
-        name: "User Two",
-      },
-    ]);
-
-    await db.insert(workspaces).values([
-      {
-        id: "ws_1",
-        name: "Workspace One",
-      },
-      {
-        id: "ws_2",
-        name: "Workspace Two",
-      },
-    ]);
-
-    await db.insert(workspaceMembers).values([
-      {
-        workspaceId: "ws_1",
-        userId: "user_1",
-        role: "owner",
-      },
-      {
-        workspaceId: "ws_2",
-        userId: "user_2",
-        role: "owner",
-      },
-    ]);
+    await resetIntegrationTestDatabase(db);
+    await seedWorkspaceMembershipFixture(db, {
+      users: [
+        {
+          id: "user_1",
+          email: "user1@example.com",
+          name: "User One",
+        },
+        {
+          id: "user_2",
+          email: "user2@example.com",
+          name: "User Two",
+        },
+      ],
+      workspaces: [
+        {
+          id: "ws_1",
+          name: "Workspace One",
+        },
+        {
+          id: "ws_2",
+          name: "Workspace Two",
+        },
+      ],
+      memberships: [
+        {
+          workspaceId: "ws_1",
+          userId: "user_1",
+          role: "owner",
+        },
+        {
+          workspaceId: "ws_2",
+          userId: "user_2",
+          role: "owner",
+        },
+      ],
+    });
   });
 
   it("rejects unauthenticated protected requests", async () => {
@@ -120,22 +111,20 @@ integration("api protected routes", () => {
   });
 
   it("enforces workspace boundary when listing contacts", async () => {
-    await db.insert(contacts).values([
-      {
-        id: "contact_a",
-        workspaceId: "ws_1",
-        email: "a@example.com",
-        name: "Contact A",
-        customFields: {},
-      },
-      {
-        id: "contact_b",
-        workspaceId: "ws_2",
-        email: "b@example.com",
-        name: "Contact B",
-        customFields: {},
-      },
-    ]);
+    await insertContactFixture(db, {
+      id: "contact_a",
+      workspaceId: "ws_1",
+      email: "a@example.com",
+      name: "Contact A",
+      customFields: {},
+    });
+    await insertContactFixture(db, {
+      id: "contact_b",
+      workspaceId: "ws_2",
+      email: "b@example.com",
+      name: "Contact B",
+      customFields: {},
+    });
 
     const app = createApiApp({
       services: {
@@ -264,7 +253,7 @@ integration("api protected routes", () => {
   });
 
   it("queues draft campaign and creates send jobs", async () => {
-    await db.insert(templates).values({
+    await insertTemplateFixture(db, {
       id: "tpl_1",
       workspaceId: "ws_1",
       name: "Welcome",
@@ -272,24 +261,22 @@ integration("api protected routes", () => {
       bodyHtml: "<p>{{name}} from {{company}}</p>",
     });
 
-    await db.insert(contacts).values([
-      {
-        id: "c_1",
-        workspaceId: "ws_1",
-        email: "alice@example.com",
-        name: "Alice",
-        company: "Acme",
-        customFields: {},
-      },
-      {
-        id: "c_2",
-        workspaceId: "ws_1",
-        email: "bob@example.com",
-        name: "Bob",
-        company: "Beta",
-        customFields: {},
-      },
-    ]);
+    await insertContactFixture(db, {
+      id: "c_1",
+      workspaceId: "ws_1",
+      email: "alice@example.com",
+      name: "Alice",
+      company: "Acme",
+      customFields: {},
+    });
+    await insertContactFixture(db, {
+      id: "c_2",
+      workspaceId: "ws_1",
+      email: "bob@example.com",
+      name: "Bob",
+      company: "Beta",
+      customFields: {},
+    });
 
     const app = createApiApp({
       services: {
@@ -362,7 +349,7 @@ integration("api protected routes", () => {
   });
 
   it("does not allow queueing a campaign twice", async () => {
-    await db.insert(templates).values({
+    await insertTemplateFixture(db, {
       id: "tpl_1",
       workspaceId: "ws_1",
       name: "Welcome",
@@ -370,7 +357,7 @@ integration("api protected routes", () => {
       bodyHtml: "<p>{{name}}</p>",
     });
 
-    await db.insert(contacts).values({
+    await insertContactFixture(db, {
       id: "c_1",
       workspaceId: "ws_1",
       email: "alice@example.com",
@@ -427,7 +414,7 @@ integration("api protected routes", () => {
   });
 
   it("enforces workspace isolation for queueCampaign", async () => {
-    await db.insert(templates).values({
+    await insertTemplateFixture(db, {
       id: "tpl_2",
       workspaceId: "ws_2",
       name: "Template WS2",
@@ -435,19 +422,16 @@ integration("api protected routes", () => {
       bodyHtml: "<p>{{name}}</p>",
     });
 
-    const [campaign] = await db
-      .insert(campaigns)
-      .values({
-        id: "camp_ws2",
-        workspaceId: "ws_2",
-        templateId: "tpl_2",
-        createdByUserId: "user_2",
-        name: "WS2 Campaign",
-        status: "draft",
-        targetType: "all_contacts",
-        targetGroupName: null,
-      })
-      .returning();
+    await insertCampaignFixture(db, {
+      id: "camp_ws2",
+      workspaceId: "ws_2",
+      templateId: "tpl_2",
+      createdByUserId: "user_2",
+      name: "WS2 Campaign",
+      status: "draft",
+      targetType: "all_contacts",
+      targetGroupName: null,
+    });
 
     const app = createApiApp({
       services: {
@@ -458,7 +442,7 @@ integration("api protected routes", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: `/api/campaigns/${campaign?.id}/queue`,
+      url: "/api/campaigns/camp_ws2/queue",
       headers: {
         "x-dev-user-id": "user_1",
         "x-dev-workspace-id": "ws_1",
@@ -471,7 +455,7 @@ integration("api protected routes", () => {
   });
 
   it("fails queueCampaign when target has no active contacts", async () => {
-    await db.insert(templates).values({
+    await insertTemplateFixture(db, {
       id: "tpl_1",
       workspaceId: "ws_1",
       name: "Welcome",
@@ -524,7 +508,7 @@ integration("api protected routes", () => {
   });
 
   it("returns campaign progress and send jobs list", async () => {
-    await db.insert(templates).values({
+    await insertTemplateFixture(db, {
       id: "tpl_1",
       workspaceId: "ws_1",
       name: "Welcome",
@@ -532,22 +516,20 @@ integration("api protected routes", () => {
       bodyHtml: "<p>{{name}}</p>",
     });
 
-    await db.insert(contacts).values([
-      {
-        id: "c_1",
-        workspaceId: "ws_1",
-        email: "alice@example.com",
-        name: "Alice",
-        customFields: {},
-      },
-      {
-        id: "c_2",
-        workspaceId: "ws_1",
-        email: "bob@example.com",
-        name: "Bob",
-        customFields: {},
-      },
-    ]);
+    await insertContactFixture(db, {
+      id: "c_1",
+      workspaceId: "ws_1",
+      email: "alice@example.com",
+      name: "Alice",
+      customFields: {},
+    });
+    await insertContactFixture(db, {
+      id: "c_2",
+      workspaceId: "ws_1",
+      email: "bob@example.com",
+      name: "Bob",
+      customFields: {},
+    });
 
     const app = createApiApp({
       services: {

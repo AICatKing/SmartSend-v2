@@ -146,6 +146,12 @@ When `PROVIDER_MODE=mock`, the worker keeps the real database flow but simulates
 - email containing `nonretryable`: non-retryable failure -> `send_jobs.status = failed`
 - email containing `unknown`: unknown failure -> follows the same retry scheduling policy as retryable, but still records `classification = unknown`
 
+Additional processing edge behavior:
+
+- repeating `processSendJob` on a job that is no longer claimable returns `NOT_FOUND` and does not create a second `delivery_attempt`
+- consumer polling with no due `pending` jobs is a no-op and returns zero counts instead of throwing
+- a `pending` job with `scheduled_at` in the future is intentionally invisible to consumer claim until it becomes due
+
 The mock adapter still requires a stored workspace sending config because processing reads and decrypts the encrypted provider key before simulating the provider response.
 
 ## Retry Backoff Policy
@@ -195,6 +201,7 @@ curl -X POST http://127.0.0.1:3001/internal/consume-once \
 - `send_jobs.scheduled_at > now()`
 - `send_jobs.attempt_count` increased by `1`
 - a `delivery_attempts` row was written with `status = 'failed'`
+- if the recipient contains `unknown`, the attempt still follows the retry/backoff path but retains `error_code = 'MOCK_UNKNOWN'`
 
 5. Trigger another immediate consumer poll and verify the same job is not claimed again before `scheduled_at`.
 
@@ -297,6 +304,7 @@ npm test --workspace @smartsend/api
 The direct workspace commands above still depend on `DATABASE_URL` and will skip if it is missing. Prefer the root `*:db` scripts so `TEST_DATABASE_URL` is wired consistently.
 
 Worker tests now include retry backoff and cron recovery database scenarios, plus the internal manual routes.
+Worker tests also cover mock `unknown` classification, duplicate `processSendJob` rejection, and no-op consumer polling when no due pending job exists.
 
 ## Failure Triage
 
