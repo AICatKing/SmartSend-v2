@@ -10,6 +10,7 @@ import { localAsyncShimServiceId } from "@smartsend/domain";
 import { z } from "zod";
 
 import { localAsyncShimEnv } from "./env.js";
+import { handleRecoveryEvent } from "./cron/recovery-handler.js";
 import { handleConsumerEvent } from "./queue/consumer-handler.js";
 
 const internalConsumeOnceBodySchema = z.object({
@@ -87,6 +88,27 @@ export function createLocalAsyncShimApp() {
       const summary = await handleConsumerEvent({
         source: "local-shim",
         messageCount: body.messageCount,
+      });
+
+      return reply.status(200).send({
+        mode: "development-only",
+        summary,
+      });
+    });
+
+    app.post("/internal/recover-once", async (request, reply) => {
+      const internalHeader = request.headers["x-smartsend-internal-dev"];
+
+      if (internalHeader !== "true") {
+        throw new AppError(
+          "FORBIDDEN",
+          "This internal development route requires x-smartsend-internal-dev: true.",
+        );
+      }
+
+      const summary = await handleRecoveryEvent({
+        source: "local-shim",
+        reason: "manual-check",
       });
 
       return reply.status(200).send({

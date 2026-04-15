@@ -16,6 +16,9 @@ import type { ProviderAdapter } from "@smartsend/domain";
 import {
   claimSendJobForProcessing,
   processSendJob,
+  recoverStuckProcessingSendJobs,
+  recoveryFailedErrorCode,
+  recoveryPendingErrorCode,
 } from "@smartsend/domain";
 import { createSecretBox } from "@smartsend/shared";
 
@@ -352,6 +355,239 @@ integration("worker processing integration", () => {
 
     await app.close();
   });
+
+  it("recovers one timed-out processing job back to pending and refreshes campaign status", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_recovery_pending",
+    });
+
+    const lockedAt = new Date(Date.now() - 20 * 60 * 1000);
+
+    await db
+      .update(sendJobs)
+      .set({
+        status: "processing",
+        lockedAt,
+        lockedBy: "worker-timeout",
+        updatedAt: lockedAt,
+      })
+      .where(eq(sendJobs.id, "send_job_recovery_pending"));
+
+    await db
+      .update(campaigns)
+      .set({
+        status: "processing",
+        updatedAt: new Date(),
+      })
+      .where(eq(campaigns.id, "campaign_1"));
+
+    const result = await recoverStuckProcessingSendJobs(db, {
+      lockTimeoutMs: 15 * 60 * 1000,
+    });
+
+    expect(result.pendingCount).toBe(1);
+    expect(result.failedCount).toBe(0);
+    expect(result.touchedCampaignCount).toBe(1);
+    expect(result.touchedSendJobIds).toEqual(["send_job_recovery_pending"]);
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_recovery_pending"))
+      .limit(1);
+    expect(job?.status).toBe("pending");
+    expect(job?.attemptCount).toBe(1);
+    expect(job?.lockedAt).toBeNull();
+    expect(job?.lockedBy).toBeNull();
+    expect(job?.processedAt).toBeNull();
+    expect(job?.lastErrorCode).toBe(recoveryPendingErrorCode);
+
+    const [campaign] = await db
+      .select()
+      .from(campaigns)
+      .where(eq(campaigns.id, "campaign_1"))
+      .limit(1);
+    expect(campaign?.status).toBe("queued");
+  });
+
+  it("keeps recovery idempotent when the same timed-out job sweep runs twice", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_recovery_idempotent",
+    });
+
+    const lockedAt = new Date(Date.now() - 20 * 60 * 1000);
+
+    await db
+      .update(sendJobs)
+      .set({
+        status: "processing",
+        lockedAt,
+        lockedBy: "worker-timeout",
+        updatedAt: lockedAt,
+      })
+      .where(eq(sendJobs.id, "send_job_recovery_idempotent"));
+
+    const first = await recoverStuckProcessingSendJobs(db, {
+      lockTimeoutMs: 15 * 60 * 1000,
+    });
+    const second = await recoverStuckProcessingSendJobs(db, {
+      lockTimeoutMs: 15 * 60 * 1000,
+    });
+
+    expect(first.pendingCount).toBe(1);
+    expect(first.failedCount).toBe(0);
+    expect(second.pendingCount).toBe(0);
+    expect(second.failedCount).toBe(0);
+    expect(second.touchedCampaignCount).toBe(0);
+    expect(second.touchedSendJobIds).toEqual([]);
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_recovery_idempotent"))
+      .limit(1);
+    expect(job?.status).toBe("pending");
+    expect(job?.attemptCount).toBe(1);
+    expect(job?.lastErrorCode).toBe(recoveryPendingErrorCode);
+  });
+
+  it("fails timed-out jobs at max attempts and refreshes mixed campaign aggregates from send_jobs truth", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_recovery_failed",
+    });
+
+    await insertSendJob(db, {
+      id: "send_job_already_sent",
+      status: "sent",
+      attemptCount: 1,
+      processedAt: new Date(),
+      providerMessageId: "provider_msg_done",
+      recipientEmail: "sent@example.com",
+      recipientName: "Sent Contact",
+      contactId: "contact_2",
+    });
+
+    const lockedAt = new Date(Date.now() - 20 * 60 * 1000);
+
+    await db
+      .update(sendJobs)
+      .set({
+        status: "processing",
+        attemptCount: 2,
+        maxAttempts: 3,
+        lockedAt,
+        lockedBy: "worker-timeout",
+        processedAt: null,
+        updatedAt: lockedAt,
+      })
+      .where(eq(sendJobs.id, "send_job_recovery_failed"));
+
+    await db
+      .update(campaigns)
+      .set({
+        status: "processing",
+        updatedAt: new Date(),
+      })
+      .where(eq(campaigns.id, "campaign_1"));
+
+    const result = await recoverStuckProcessingSendJobs(db, {
+      lockTimeoutMs: 15 * 60 * 1000,
+    });
+
+    expect(result.pendingCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+    expect(result.touchedCampaignCount).toBe(1);
+    expect(result.touchedSendJobIds).toEqual(["send_job_recovery_failed"]);
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_recovery_failed"))
+      .limit(1);
+    expect(job?.status).toBe("failed");
+    expect(job?.attemptCount).toBe(3);
+    expect(job?.processedAt).not.toBeNull();
+    expect(job?.lockedAt).toBeNull();
+    expect(job?.lastErrorCode).toBe(recoveryFailedErrorCode);
+
+    const [campaign] = await db
+      .select()
+      .from(campaigns)
+      .where(eq(campaigns.id, "campaign_1"))
+      .limit(1);
+    expect(campaign?.status).toBe("failed");
+  });
+
+  it("exposes an internal dev-only route to trigger one recovery sweep", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_internal_recovery",
+    });
+
+    const lockedAt = new Date(Date.now() - 20 * 60 * 1000);
+
+    await db
+      .update(sendJobs)
+      .set({
+        status: "processing",
+        lockedAt,
+        lockedBy: "worker-timeout",
+        updatedAt: lockedAt,
+      })
+      .where(eq(sendJobs.id, "send_job_internal_recovery"));
+
+    const app = createLocalAsyncShimApp();
+    await app.ready();
+
+    const forbidden = await app.inject({
+      method: "POST",
+      url: "/internal/recover-once",
+      payload: {},
+    });
+    expect(forbidden.statusCode).toBe(403);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/internal/recover-once",
+      headers: {
+        "x-smartsend-internal-dev": "true",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as {
+      mode: string;
+      summary: {
+        failedCount: number;
+        pendingCount: number;
+        timedOutBefore: string;
+        touchedCampaignCount: number;
+        touchedSendJobIds: string[];
+      };
+    };
+
+    expect(payload.mode).toBe("development-only");
+    expect(payload.summary.pendingCount).toBe(1);
+    expect(payload.summary.failedCount).toBe(0);
+    expect(payload.summary.touchedCampaignCount).toBe(1);
+    expect(payload.summary.touchedSendJobIds).toEqual(["send_job_internal_recovery"]);
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_internal_recovery"))
+      .limit(1);
+    expect(job?.status).toBe("pending");
+
+    await app.close();
+  });
 });
 
 function createAdapter(
@@ -450,4 +686,53 @@ async function seedScenario({
       encryptedApiKey: secretBox.encrypt("resend_api_key_test"),
     });
   }
+}
+
+async function insertSendJob(
+  db: Database,
+  input: {
+    attemptCount: number;
+    contactId: string;
+    id: string;
+    lockedAt?: Date | null;
+    lockedBy?: string | null;
+    maxAttempts?: number;
+    processedAt?: Date | null;
+    providerMessageId?: string | null;
+    recipientEmail: string;
+    recipientName: string;
+    status: NonNullable<typeof sendJobs.$inferInsert.status>;
+  },
+) {
+  if (input.contactId !== "contact_1") {
+    await db.insert(contacts).values({
+      id: input.contactId,
+      workspaceId: "ws_1",
+      email: input.recipientEmail,
+      name: input.recipientName,
+      customFields: {},
+    });
+  }
+
+  await db.insert(sendJobs).values({
+    id: input.id,
+    workspaceId: "ws_1",
+    campaignId: "campaign_1",
+    contactId: input.contactId,
+    recipientEmail: input.recipientEmail,
+    recipientName: input.recipientName,
+    renderedSubject: "Hello",
+    renderedBody: "<p>Hello</p>",
+    status: input.status,
+    attemptCount: input.attemptCount,
+    maxAttempts: input.maxAttempts ?? 3,
+    scheduledAt: new Date(Date.now() - 60_000),
+    lockedAt: input.lockedAt ?? null,
+    lockedBy: input.lockedBy ?? null,
+    processedAt: input.processedAt ?? null,
+    lastErrorCode: null,
+    lastErrorMessage: null,
+    provider: "resend",
+    providerMessageId: input.providerMessageId ?? null,
+  });
 }

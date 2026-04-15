@@ -36,7 +36,7 @@ export function startLocalAsyncShim() {
       });
     },
     async simulateRecoverySweep() {
-      await handleRecoveryEvent({
+      return handleRecoveryEvent({
         source: "local-shim",
         reason: "manual-check",
       });

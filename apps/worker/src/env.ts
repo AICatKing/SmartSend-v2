@@ -15,6 +15,7 @@ const localAsyncShimEnvSchema = z
     API_ENCRYPTION_KEY: z.string().min(32).optional(),
     DATABASE_URL: z.string().min(1).optional(),
     PROVIDER_MODE: z.enum(["mock", "resend"]).optional(),
+    SEND_JOB_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
   })
   .transform((env) => ({
     API_ENCRYPTION_KEY: env.API_ENCRYPTION_KEY,
@@ -24,6 +25,7 @@ const localAsyncShimEnvSchema = z
     PORT: env.LOCAL_ASYNC_SHIM_PORT ?? env.WORKER_PORT ?? 3001,
     DATABASE_URL: env.DATABASE_URL,
     PROVIDER_MODE: env.PROVIDER_MODE ?? "mock",
+    SEND_JOB_LOCK_TIMEOUT_MS: env.SEND_JOB_LOCK_TIMEOUT_MS ?? 15 * 60 * 1000,
   }));
 
 export const localAsyncShimEnv = parseEnv(localAsyncShimEnvSchema);
