@@ -1,0 +1,282 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-muted: #f7f9fb;
+  --text: #1f2a37;
+  --muted: #516074;
+  --border: #d8e0e8;
+  --nav-bg: #14213d;
+  --nav-hover: #1e2f58;
+  --nav-active: #fca311;
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+  --primary: #2251ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top right, #e6eeff, transparent 35%), var(--bg);
+  color: var(--text);
+}
+
+a {
+  color: var(--primary);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+h2 {
+  margin-bottom: 0.5rem;
+}
+
+h3 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.5rem;
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  border: 0;
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.85rem;
+  cursor: pointer;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+}
+
+.side-nav {
+  background: linear-gradient(180deg, #0f1c34, var(--nav-bg));
+  color: #e8edf9;
+  padding: 1.25rem;
+  display: grid;
+  gap: 1.2rem;
+  align-content: start;
+}
+
+.side-nav p {
+  margin: 0.3rem 0 0;
+  color: #bdc8e6;
+  font-size: 0.88rem;
+}
+
+.side-nav nav {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.nav-link {
+  display: block;
+  color: #d8e0f4;
+  text-decoration: none;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.45rem;
+}
+
+.nav-link:hover {
+  background: var(--nav-hover);
+}
+
+.nav-link-active {
+  background: var(--nav-active);
+  color: #3b2a00;
+  font-weight: 700;
+}
+
+.main-content {
+  padding: 1rem 1.25rem 1.4rem;
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.top-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  padding: 1rem;
+}
+
+.context-card {
+  background: linear-gradient(180deg, var(--surface), var(--surface-muted));
+}
+
+.form-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.span-two {
+  grid-column: span 2;
+}
+
+.span-all {
+  grid-column: 1 / -1;
+}
+
+.actions {
+  display: flex;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.status-text {
+  margin: 0.5rem 0;
+  color: #0f3c7f;
+}
+
+.table-scroll {
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 0.55rem 0.4rem;
+  vertical-align: middle;
+}
+
+th {
+  color: #2f3d57;
+  background: var(--surface-muted);
+}
+
+.empty-cell {
+  text-align: center;
+  color: var(--muted);
+  padding: 1rem;
+}
+
+.metrics-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin-bottom: 1rem;
+}
+
+.metrics-grid article {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .side-nav {
+    padding: 0.85rem 1rem;
+  }
+
+  .side-nav nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .two-col,
+  .three-col {
+    grid-template-columns: 1fr;
+  }
+
+  .span-two,
+  .span-all {
+    grid-column: auto;
+  }
+
+  .top-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+}

@@ -5,6 +5,7 @@
 Current implemented areas:
 
 - `apps/api`: protected API, workspace sending config, campaign draft/queue flow, progress queries
+- `apps/web`: Vite + React + TypeScript + React Router SPA for product frontend flows
 - `apps/worker`: local async shim for development, queue-consumer-style processing, internal dev trigger
 - `packages/db`: PostgreSQL + Drizzle schema and migrations
 - `packages/contracts`: shared request/response schemas
@@ -95,19 +96,43 @@ API health endpoint:
 curl http://127.0.0.1:3000/health
 ```
 
-Frontend integration page (served by `apps/api`):
+## Start Product Web App
+
+```bash
+npm run dev:web
+```
+
+Default local URL:
+
+```bash
+open http://127.0.0.1:5173
+```
+
+`apps/web` uses Vite dev proxy and forwards `/api` requests to `http://127.0.0.1:3000` by default.
+
+Optional override when API runs on a different origin:
+
+```bash
+WEB_API_TARGET=http://127.0.0.1:3100 npm run dev:web
+```
+
+Product pages currently cover the minimum real loop:
+
+- workspace sending config get/upsert
+- contacts list/create/import/delete
+- templates list/create/delete
+- campaign create draft / queue
+- campaign progress / send-jobs / recent-failures views
+
+## `/app` Integration Tool Page
+
+The old integration tool page is still available for backend debugging only:
 
 ```bash
 open http://127.0.0.1:3000/app
 ```
 
-The page uses current protected APIs (dev headers) and provides:
-
-- workspace sending config get/upsert
-- contacts list/create/import/delete
-- templates list/create/delete
-- campaigns list/create-draft/queue
-- campaign progress/send-jobs/recent-failures views
+It is not the product frontend and should not be expanded for product UX.
 
 ## Start Local Async Shim
 
@@ -250,8 +275,16 @@ Boundary:
 2. Run `npm run db:migrate`.
 3. Run `npm run db:seed:local`.
 4. Start `apps/api`.
-5. Start `apps/worker` with `PROVIDER_MODE=mock`.
-6. Create a contact:
+5. Start `apps/web`.
+6. Start `apps/worker` with `PROVIDER_MODE=mock`.
+7. In `apps/web`, complete: workspace config -> contacts -> templates -> campaigns.
+8. In `Campaigns` page, create draft and queue it.
+9. Call `POST /internal/consume-once` on the local async shim.
+10. Back in `Campaigns` page, refresh progress/send-jobs/recent-failures.
+
+You can also validate the same flow with direct API calls:
+
+11. Create a contact:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/contacts \
@@ -264,7 +297,7 @@ curl -X POST http://127.0.0.1:3000/api/contacts \
   }'
 ```
 
-7. Create a template:
+12. Create a template:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/templates \
@@ -278,7 +311,7 @@ curl -X POST http://127.0.0.1:3000/api/templates \
   }'
 ```
 
-8. Create a campaign draft using the returned `template.id`:
+13. Create a campaign draft using the returned `template.id`:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/campaigns/drafts \
@@ -292,7 +325,7 @@ curl -X POST http://127.0.0.1:3000/api/campaigns/drafts \
   }'
 ```
 
-9. Queue the campaign using the returned `campaign.id`:
+14. Queue the campaign using the returned `campaign.id`:
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/campaigns/<campaign_id>/queue \
@@ -302,8 +335,8 @@ curl -X POST http://127.0.0.1:3000/api/campaigns/<campaign_id>/queue \
   -d '{}'
 ```
 
-10. Call `POST /internal/consume-once` on the local async shim.
-11. Inspect `send_jobs`, `delivery_attempts`, and campaign progress.
+15. Call `POST /internal/consume-once` on the local async shim.
+16. Inspect `send_jobs`, `delivery_attempts`, and campaign progress.
 
 Useful queries:
 
@@ -325,13 +358,13 @@ curl -H 'x-dev-user-id: user_local_owner' \
   http://127.0.0.1:3000/api/campaigns/<campaign_id>/recent-failures
 ```
 
-## Minimal Local Frontend Integration Flow
+## Minimal Local `/app` Debug Flow
 
 1. Start Postgres and run `npm run db:migrate`.
 2. Run `npm run db:seed:local`.
 3. Start API: `npm run dev:api`.
 4. Start worker local async shim: `npm run dev:async-shim` (with `PROVIDER_MODE=mock`).
-5. Open `http://127.0.0.1:3000/app`.
+5. Open `http://127.0.0.1:3000/app` (debug tool only).
 6. Confirm request context defaults:
    - `x-dev-user-id=user_local_owner`
    - `x-dev-workspace-id=ws_local_demo`

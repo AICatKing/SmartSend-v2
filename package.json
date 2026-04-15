@@ -12,9 +12,11 @@
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev:api": "npm run dev --workspace @smartsend/api",
+    "dev:web": "npm run dev --workspace @smartsend/web",
     "dev:async-shim": "npm run dev --workspace @smartsend/local-async-shim",
     "dev:worker": "npm run dev:async-shim",
     "start:api": "npm run start --workspace @smartsend/api",
+    "start:web": "npm run preview --workspace @smartsend/web",
     "start:async-shim": "npm run start --workspace @smartsend/local-async-shim",
     "start:worker": "npm run start:async-shim",
     "db:check": "npm run db:check --workspace @smartsend/db",
@@ -22,6 +24,7 @@
     "db:migrate": "npm run db:migrate --workspace @smartsend/db",
     "db:test:prepare": "npm run db:test:prepare --workspace @smartsend/db",
     "db:seed:local": "npm run db:seed:local --workspace @smartsend/db",
+    "build:web": "npm run build --workspace @smartsend/web",
     "test:api:db": "tsx scripts/run-db-workspace-test.ts @smartsend/api",
     "test:worker:db": "tsx scripts/run-db-workspace-test.ts @smartsend/local-async-shim",
     "test:baseline:db": "tsx scripts/run-db-baseline.ts"
