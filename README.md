@@ -66,6 +66,23 @@ docker compose up -d postgres
 npm run db:check
 ```
 
+## Seed Local Dev Bootstrap Data
+
+Create one reusable local dev user, workspace membership, and workspace sending config:
+
+```bash
+npm run db:seed:local
+```
+
+The seed is idempotent and prepares:
+
+- user: `user_local_owner`
+- workspace: `ws_local_demo`
+- membership: `owner`
+- workspace sending config for `ws_local_demo`
+
+This seed is for local manual verification only. It does not try to model full demo data and it does not write `audit_logs`.
+
 ## Start API
 
 ```bash
@@ -214,16 +231,87 @@ Boundary:
 ## Minimal Local Processing Flow
 
 1. Start Postgres.
-2. Start `apps/api`.
-3. Start `apps/worker` with `PROVIDER_MODE=mock`.
-4. Create or update a workspace sending config through the API.
-5. Create a campaign and queue it so `send_jobs` exist in the database.
-6. Call `POST /internal/consume-once` on the local async shim.
-7. Inspect `send_jobs`, `delivery_attempts`, and campaign progress.
+2. Run `npm run db:migrate`.
+3. Run `npm run db:seed:local`.
+4. Start `apps/api`.
+5. Start `apps/worker` with `PROVIDER_MODE=mock`.
+6. Create a contact:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/contacts \
+  -H 'content-type: application/json' \
+  -H 'x-dev-user-id: user_local_owner' \
+  -H 'x-dev-workspace-id: ws_local_demo' \
+  -d '{
+    "email":"alice@example.com",
+    "name":"Alice Example"
+  }'
+```
+
+7. Create a template:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/templates \
+  -H 'content-type: application/json' \
+  -H 'x-dev-user-id: user_local_owner' \
+  -H 'x-dev-workspace-id: ws_local_demo' \
+  -d '{
+    "name":"Local Welcome",
+    "subject":"Hello {{name}}",
+    "bodyHtml":"<p>Hello {{name}}</p>"
+  }'
+```
+
+8. Create a campaign draft using the returned `template.id`:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/campaigns/drafts \
+  -H 'content-type: application/json' \
+  -H 'x-dev-user-id: user_local_owner' \
+  -H 'x-dev-workspace-id: ws_local_demo' \
+  -d '{
+    "templateId":"<template_id>",
+    "name":"Local Processing Demo",
+    "target":{"type":"all_contacts"}
+  }'
+```
+
+9. Queue the campaign using the returned `campaign.id`:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/campaigns/<campaign_id>/queue \
+  -H 'content-type: application/json' \
+  -H 'x-dev-user-id: user_local_owner' \
+  -H 'x-dev-workspace-id: ws_local_demo' \
+  -d '{}'
+```
+
+10. Call `POST /internal/consume-once` on the local async shim.
+11. Inspect `send_jobs`, `delivery_attempts`, and campaign progress.
+
+Useful queries:
+
+```bash
+curl -H 'x-dev-user-id: user_local_owner' \
+  -H 'x-dev-workspace-id: ws_local_demo' \
+  http://127.0.0.1:3000/api/campaigns/<campaign_id>/progress
+```
+
+```bash
+curl -H 'x-dev-user-id: user_local_owner' \
+  -H 'x-dev-workspace-id: ws_local_demo' \
+  http://127.0.0.1:3000/api/campaigns/<campaign_id>/send-jobs
+```
+
+```bash
+curl -H 'x-dev-user-id: user_local_owner' \
+  -H 'x-dev-workspace-id: ws_local_demo' \
+  http://127.0.0.1:3000/api/campaigns/<campaign_id>/recent-failures
+```
 
 ## Minimal Local Retry Validation
 
-1. Start Postgres, `apps/api`, and `apps/worker` with `PROVIDER_MODE=mock`.
+1. Start Postgres, run `npm run db:migrate`, run `npm run db:seed:local`, then start `apps/api` and `apps/worker` with `PROVIDER_MODE=mock`.
 2. Queue a campaign whose recipient email contains `retryable` or `unknown`.
 3. Trigger one consumer poll:
 
@@ -246,7 +334,7 @@ curl -X POST http://127.0.0.1:3001/internal/consume-once \
 
 ## Minimal Local Recovery Validation
 
-1. Start Postgres, `apps/api`, and `apps/worker`.
+1. Start Postgres, run `npm run db:migrate`, run `npm run db:seed:local`, then start `apps/api` and `apps/worker`.
 2. Queue a campaign so at least one `send_job` exists.
 3. In PostgreSQL, simulate a stuck job:
 

@@ -21,6 +21,7 @@
     "db:generate": "npm run db:generate --workspace @smartsend/db",
     "db:migrate": "npm run db:migrate --workspace @smartsend/db",
     "db:test:prepare": "npm run db:test:prepare --workspace @smartsend/db",
+    "db:seed:local": "npm run db:seed:local --workspace @smartsend/db",
     "test:api:db": "tsx scripts/run-db-workspace-test.ts @smartsend/api",
     "test:worker:db": "tsx scripts/run-db-workspace-test.ts @smartsend/local-async-shim",
     "test:baseline:db": "tsx scripts/run-db-baseline.ts"
