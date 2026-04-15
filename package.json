@@ -19,7 +19,11 @@
     "start:worker": "npm run start:async-shim",
     "db:check": "npm run db:check --workspace @smartsend/db",
     "db:generate": "npm run db:generate --workspace @smartsend/db",
-    "db:migrate": "npm run db:migrate --workspace @smartsend/db"
+    "db:migrate": "npm run db:migrate --workspace @smartsend/db",
+    "db:test:prepare": "npm run db:test:prepare --workspace @smartsend/db",
+    "test:api:db": "tsx scripts/run-db-workspace-test.ts @smartsend/api",
+    "test:worker:db": "tsx scripts/run-db-workspace-test.ts @smartsend/local-async-shim",
+    "test:baseline:db": "tsx scripts/run-db-baseline.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

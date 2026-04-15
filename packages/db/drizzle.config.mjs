@@ -15,7 +15,7 @@ if (existsSync(envFile)) {
 }
 
 if (existsSync(localEnvFile)) {
-  dotenv.config({ path: localEnvFile, override: true });
+  dotenv.config({ path: localEnvFile, override: false });
 }
 
 const databaseUrl = process.env.DATABASE_URL;

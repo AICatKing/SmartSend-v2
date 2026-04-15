@@ -13,7 +13,6 @@ Current implemented areas:
 
 Current intentionally deferred areas:
 
-- retry backoff scheduling policy beyond immediate requeue
 - real Vercel Queues production integration
 - frontend wiring
 
@@ -41,12 +40,14 @@ Recommended local values:
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/smartsend
+TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/smartsend_test
 API_ENCRYPTION_KEY=replace-with-at-least-32-characters
 PROVIDER_MODE=mock
 ```
 
 Notes:
 
+- `DATABASE_URL` is the development database. `TEST_DATABASE_URL` must point to a separate database used only for integration tests.
 - `API_ENCRYPTION_KEY` must match the key used by `apps/api`, otherwise the worker cannot decrypt `workspace_sending_configs.encrypted_api_key`.
 - `PROVIDER_MODE=mock` is the default local development mode.
 - `PROVIDER_MODE=resend` keeps the real Resend HTTP adapter enabled.
@@ -141,11 +142,29 @@ Recovery rule:
 When `PROVIDER_MODE=mock`, the worker keeps the real database flow but simulates provider outcomes from recipient email patterns:
 
 - normal email, for example `alice@example.com`: success -> `send_jobs.status = sent`
-- email containing `retryable`: retryable failure -> `send_jobs.status = pending`
+- email containing `retryable`: retryable failure -> `send_jobs.status = pending` with delayed `scheduled_at`
 - email containing `nonretryable`: non-retryable failure -> `send_jobs.status = failed`
-- email containing `unknown`: unknown failure -> currently treated through the retryable branch until max attempts are reached
+- email containing `unknown`: unknown failure -> follows the same retry scheduling policy as retryable, but still records `classification = unknown`
 
 The mock adapter still requires a stored workspace sending config because processing reads and decrypts the encrypted provider key before simulating the provider response.
+
+## Retry Backoff Policy
+
+Retry scheduling is defined centrally in `packages/domain` and currently uses:
+
+- base delay: `5 minutes`
+- growth rule: exponential backoff with multiplier `2`
+- resulting sequence: `5m -> 10m -> 20m`, capped at `60m`
+- `retryable`: requeue to `pending` with `scheduled_at` moved into the future
+- `unknown`: same scheduling policy as `retryable`, but still treated as `unknown` classification in attempt history and processing results
+- `non_retryable`: no requeue, immediate `failed`
+- if the next failed attempt reaches `max_attempts`, the job becomes `failed` instead of being requeued
+
+Boundary with recovery:
+
+- `scheduled_at` answers "when may this pending job be claimed again"
+- `locked_at` timeout recovery answers "what to do with a job stuck in processing"
+- they are complementary mechanisms, not one merged mechanism
 
 ## Minimal Local Processing Flow
 
@@ -156,6 +175,28 @@ The mock adapter still requires a stored workspace sending config because proces
 5. Create a campaign and queue it so `send_jobs` exist in the database.
 6. Call `POST /internal/consume-once` on the local async shim.
 7. Inspect `send_jobs`, `delivery_attempts`, and campaign progress.
+
+## Minimal Local Retry Validation
+
+1. Start Postgres, `apps/api`, and `apps/worker` with `PROVIDER_MODE=mock`.
+2. Queue a campaign whose recipient email contains `retryable` or `unknown`.
+3. Trigger one consumer poll:
+
+```bash
+curl -X POST http://127.0.0.1:3001/internal/consume-once \
+  -H 'content-type: application/json' \
+  -H 'x-smartsend-internal-dev: true' \
+  -d '{"messageCount":1}'
+```
+
+4. Verify in PostgreSQL:
+
+- `send_jobs.status = 'pending'`
+- `send_jobs.scheduled_at > now()`
+- `send_jobs.attempt_count` increased by `1`
+- a `delivery_attempts` row was written with `status = 'failed'`
+
+5. Trigger another immediate consumer poll and verify the same job is not claimed again before `scheduled_at`.
 
 ## Minimal Local Recovery Validation
 
@@ -189,6 +230,58 @@ curl -X POST http://127.0.0.1:3001/internal/recover-once \
 
 ## Tests
 
+## Prepare Test Database
+
+Integration tests should run against `TEST_DATABASE_URL`, not the development `DATABASE_URL`.
+
+From an empty local environment:
+
+1. Start PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
+
+2. Set a dedicated test database URL:
+
+```bash
+export TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/smartsend_test
+```
+
+3. Reset and migrate the test database:
+
+```bash
+npm run db:test:prepare
+```
+
+Behavior:
+
+- drops and recreates the database pointed to by `TEST_DATABASE_URL`
+- refuses to run if `TEST_DATABASE_URL` uses the same database name as `DATABASE_URL`
+- runs Drizzle migrations against the recreated test database
+
+## Run Integration Tests
+
+Run API integration tests against the dedicated test database:
+
+```bash
+npm run test:api:db
+```
+
+Run worker integration tests against the dedicated test database:
+
+```bash
+npm run test:worker:db
+```
+
+Run the full minimal baseline end-to-end:
+
+```bash
+npm run test:baseline:db
+```
+
+Do not run `test:api:db` and `test:worker:db` in parallel against the same `TEST_DATABASE_URL`. Both suites clear and reseed shared tables.
+
 Run worker processing integration tests:
 
 ```bash
@@ -201,9 +294,25 @@ Run API tests:
 npm test --workspace @smartsend/api
 ```
 
-Both integration suites require `DATABASE_URL`. Without it, they are skipped by design.
+The direct workspace commands above still depend on `DATABASE_URL` and will skip if it is missing. Prefer the root `*:db` scripts so `TEST_DATABASE_URL` is wired consistently.
 
-Worker tests now include cron recovery database scenarios and the internal manual recovery route.
+Worker tests now include retry backoff and cron recovery database scenarios, plus the internal manual routes.
+
+## Failure Triage
+
+If baseline execution fails, start here:
+
+- verify Docker Postgres is running: `docker compose ps`
+- verify the test database is reachable: `DATABASE_URL="$TEST_DATABASE_URL" npm run db:check`
+- recreate the test database from scratch: `npm run db:test:prepare`
+- inspect PostgreSQL container logs: `docker logs smartsend-postgres`
+- list migrated tables in the test database:
+
+```bash
+docker exec -it smartsend-postgres psql -U postgres -d smartsend_test -c '\dt'
+```
+
+Use the actual database name from `TEST_DATABASE_URL` in the last command.
 
 ## Typecheck
 
@@ -217,5 +326,5 @@ npm run typecheck
 - Drizzle migration output is `packages/db/drizzle/`
 - production direction remains `Vercel Functions + Vercel Queues + Vercel Cron Jobs`
 - queue producer logging exists, but real queue delivery remains a later work package
-- cron recovery exists for locked `processing` job reconciliation, but retry backoff policy remains a later package
+- retry backoff and cron recovery now exist as separate mechanisms for delayed retry and stuck-job compensation
 - `npm run dev:worker` and `npm run start:worker` are kept as compatibility aliases and point to the local async shim

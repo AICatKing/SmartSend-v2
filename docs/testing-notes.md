@@ -10,6 +10,33 @@ updated: 2026-04-14
 
 这份文档不追求覆盖所有测试类型，只定义第一阶段必须存在的最小验证闭环，避免开发过程中把“看起来能跑”误当成“系统已正确”。
 
+## 当前真实数据库测试基线
+
+当前仓库约定：
+
+- `DATABASE_URL` 用于本地开发数据库
+- `TEST_DATABASE_URL` 用于本地测试数据库
+- 两者必须指向不同数据库名，避免测试清理误伤开发数据
+
+当前最小基线命令：
+
+1. `docker compose up -d postgres`
+2. `npm run db:test:prepare`
+3. `npm run test:api:db`
+4. `npm run test:worker:db`
+
+或者直接执行：
+
+1. `docker compose up -d postgres`
+2. `npm run test:baseline:db`
+
+当前基线脚本行为：
+
+- `db:test:prepare` 会重建 `TEST_DATABASE_URL` 指向的数据库并执行 migration
+- `test:api:db` 与 `test:worker:db` 会把 `TEST_DATABASE_URL` 注入为测试进程的 `DATABASE_URL`
+- workspace 级原生命令仍可直接运行，但若未显式提供 `DATABASE_URL` 仍会 skip
+- `apps/api` 与 `apps/worker` 当前不应并行打到同一个测试库，因为两侧测试都采用全表清理策略
+
 ## 第一阶段必须验证的系统不变量
 
 - 同一个 `send_job` 任一时刻只能有一个活跃处理流程
@@ -33,6 +60,7 @@ updated: 2026-04-14
 
 - 本地空数据库能完整跑完 migration
 - migration 后关键表、索引、约束存在
+- 对当前仓库，至少应能通过 `npm run db:test:prepare` 从空测试库完成重建
 
 ### 2. Contract tests
 
@@ -69,6 +97,7 @@ updated: 2026-04-14
 
 - 主链路能在测试数据库中完整跑通
 - 中间失败不会留下无法解释的状态
+- `apps/api` 与 `apps/worker` 两侧测试都能在同一个独立测试库上重复执行
 
 ### 4. Authorization tests
 

@@ -10,6 +10,7 @@
     "db:check": "tsx src/scripts/check-connection.ts",
     "db:generate": "tsc -p tsconfig.drizzle.json && drizzle-kit generate --config drizzle.config.mjs",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.mjs",
+    "db:test:prepare": "tsx src/scripts/prepare-test-db.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
