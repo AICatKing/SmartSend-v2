@@ -20,6 +20,7 @@ import type {
   ProviderSendInput,
   ProviderSendResult,
 } from "./provider-adapter.js";
+import { computeSendJobRetryDecision } from "./send-job-retry-policy.js";
 
 type ClaimedSendJob = typeof sendJobs.$inferSelect;
 
@@ -404,8 +405,14 @@ async function handleFailedSendResult(
     return "failed";
   }
 
-  const nextAttemptCount = sendJob.attemptCount + 1;
-  if (nextAttemptCount >= sendJob.maxAttempts) {
+  const retryDecision = computeSendJobRetryDecision({
+    attemptedAt: completedAt,
+    currentAttemptCount: sendJob.attemptCount,
+    classification: failure.classification,
+    maxAttempts: sendJob.maxAttempts,
+  });
+
+  if (!retryDecision || retryDecision.outcome === "fail") {
     await markSendJobFailed(db, {
       sendJob,
       completedAt,
@@ -419,7 +426,7 @@ async function handleFailedSendResult(
     sendJob,
     errorCode,
     errorMessage,
-    scheduledAt: new Date(),
+    scheduledAt: retryDecision.nextScheduledAt,
   });
   return "pending";
 }

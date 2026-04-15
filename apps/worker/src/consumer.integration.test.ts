@@ -19,6 +19,7 @@ import {
   recoverStuckProcessingSendJobs,
   recoveryFailedErrorCode,
   recoveryPendingErrorCode,
+  sendJobRetryBaseDelayMs,
 } from "@smartsend/domain";
 import { createSecretBox } from "@smartsend/shared";
 
@@ -144,7 +145,7 @@ integration("worker processing integration", () => {
     expect(campaign?.status).toBe("completed");
   });
 
-  it("writes delivery attempt and requeues send job for retryable failure", async () => {
+  it("schedules the first retryable failure into the future and keeps it unclaimable until due", async () => {
     await seedScenario({
       db,
       includeSendingConfig: true,
@@ -154,6 +155,8 @@ integration("worker processing integration", () => {
     await claimSendJobForProcessing(db, {
       lockedBy: "worker-retryable",
     });
+
+    const startedAt = Date.now();
 
     const result = await processSendJob(db, {
       sendJobId: "send_job_retryable",
@@ -180,6 +183,15 @@ integration("worker processing integration", () => {
     expect(job?.attemptCount).toBe(1);
     expect(job?.processedAt).toBeNull();
     expect(job?.lastErrorCode).toBe("RATE_LIMIT");
+    expect(job?.scheduledAt).not.toBeNull();
+    expect(job?.scheduledAt!.getTime()).toBeGreaterThanOrEqual(
+      startedAt + sendJobRetryBaseDelayMs,
+    );
+
+    const immediatelyClaimed = await claimSendJobForProcessing(db, {
+      lockedBy: "worker-immediate-retry",
+    });
+    expect(immediatelyClaimed).toBeNull();
 
     const [attempt] = await db
       .select()
@@ -195,6 +207,191 @@ integration("worker processing integration", () => {
       .where(eq(campaigns.id, "campaign_1"))
       .limit(1);
     expect(campaign?.status).toBe("queued");
+  });
+
+  it("applies exponential backoff across repeated retryable failures and eventually fails at max attempts", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_retryable_terminal",
+    });
+
+    await db
+      .update(sendJobs)
+      .set({
+        status: "processing",
+        attemptCount: 1,
+        lockedAt: new Date(),
+        lockedBy: "worker-retryable-second-delay",
+        processedAt: null,
+        scheduledAt: new Date(Date.now() - 60_000),
+        updatedAt: new Date(),
+      })
+      .where(eq(sendJobs.id, "send_job_retryable_terminal"));
+
+    const secondAttemptStartedAt = Date.now();
+
+    const secondAttemptResult = await processSendJob(db, {
+      sendJobId: "send_job_retryable_terminal",
+      lockedBy: "worker-retryable-second-delay",
+      providerAdapter: createAdapter({
+        ok: false,
+        provider: "resend",
+        classification: "retryable",
+        errorCode: "TEMPORARY_PROVIDER_OUTAGE",
+        errorMessage: "Transient provider outage",
+        responsePayloadJson: { accepted: false },
+      }),
+    });
+
+    expect(secondAttemptResult.finalStatus).toBe("pending");
+    expect(secondAttemptResult.classification).toBe("retryable");
+
+    const [afterSecondAttempt] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_retryable_terminal"))
+      .limit(1);
+    expect(afterSecondAttempt?.status).toBe("pending");
+    expect(afterSecondAttempt?.attemptCount).toBe(2);
+    expect(afterSecondAttempt?.scheduledAt!.getTime()).toBeGreaterThanOrEqual(
+      secondAttemptStartedAt + sendJobRetryBaseDelayMs * 2,
+    );
+
+    await db
+      .update(sendJobs)
+      .set({
+        status: "processing",
+        attemptCount: 2,
+        lockedAt: new Date(),
+        lockedBy: "worker-retryable-terminal",
+        processedAt: null,
+        scheduledAt: new Date(Date.now() - 60_000),
+        updatedAt: new Date(),
+      })
+      .where(eq(sendJobs.id, "send_job_retryable_terminal"));
+
+    const result = await processSendJob(db, {
+      sendJobId: "send_job_retryable_terminal",
+      lockedBy: "worker-retryable-terminal",
+      providerAdapter: createAdapter({
+        ok: false,
+        provider: "resend",
+        classification: "retryable",
+        errorCode: "TEMPORARY_PROVIDER_OUTAGE",
+        errorMessage: "Transient provider outage",
+        responsePayloadJson: { accepted: false },
+      }),
+    });
+
+    expect(result.finalStatus).toBe("failed");
+    expect(result.classification).toBe("retryable");
+
+    const [job] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_retryable_terminal"))
+      .limit(1);
+    expect(job?.status).toBe("failed");
+    expect(job?.attemptCount).toBe(3);
+    expect(job?.processedAt).not.toBeNull();
+    expect(job?.lockedAt).toBeNull();
+    expect(job?.lockedBy).toBeNull();
+    expect(job?.lastErrorCode).toBe("TEMPORARY_PROVIDER_OUTAGE");
+
+    const attempts = await db
+      .select()
+      .from(deliveryAttempts)
+      .where(eq(deliveryAttempts.sendJobId, "send_job_retryable_terminal"));
+    expect(attempts).toHaveLength(2);
+    expect(attempts.every((attempt) => attempt.status === "failed")).toBe(true);
+  });
+
+  it("schedules unknown failures with the same backoff policy and fails them once max attempts are exhausted", async () => {
+    await seedScenario({
+      db,
+      includeSendingConfig: true,
+      sendJobId: "send_job_unknown",
+    });
+
+    await claimSendJobForProcessing(db, {
+      lockedBy: "worker-unknown-first",
+    });
+
+    const startedAt = Date.now();
+
+    const firstResult = await processSendJob(db, {
+      sendJobId: "send_job_unknown",
+      lockedBy: "worker-unknown-first",
+      providerAdapter: createAdapter({
+        ok: false,
+        provider: "resend",
+        classification: "unknown",
+        errorCode: "PROVIDER_UNCLEAR_STATE",
+        errorMessage: "Provider returned an unclear state.",
+        responsePayloadJson: { accepted: false },
+      }),
+    });
+
+    expect(firstResult.finalStatus).toBe("pending");
+    expect(firstResult.classification).toBe("unknown");
+
+    const [afterFirst] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_unknown"))
+      .limit(1);
+    expect(afterFirst?.status).toBe("pending");
+    expect(afterFirst?.attemptCount).toBe(1);
+    expect(afterFirst?.scheduledAt).not.toBeNull();
+    expect(afterFirst?.scheduledAt!.getTime()).toBeGreaterThanOrEqual(
+      startedAt + sendJobRetryBaseDelayMs,
+    );
+
+    await db
+      .update(sendJobs)
+      .set({
+        status: "processing",
+        attemptCount: 2,
+        lockedAt: new Date(),
+        lockedBy: "worker-unknown-terminal",
+        processedAt: null,
+        scheduledAt: new Date(Date.now() - 60_000),
+        updatedAt: new Date(),
+      })
+      .where(eq(sendJobs.id, "send_job_unknown"));
+
+    const secondResult = await processSendJob(db, {
+      sendJobId: "send_job_unknown",
+      lockedBy: "worker-unknown-terminal",
+      providerAdapter: createAdapter({
+        ok: false,
+        provider: "resend",
+        classification: "unknown",
+        errorCode: "PROVIDER_UNCLEAR_STATE",
+        errorMessage: "Provider returned an unclear state.",
+        responsePayloadJson: { accepted: false },
+      }),
+    });
+
+    expect(secondResult.finalStatus).toBe("failed");
+    expect(secondResult.classification).toBe("unknown");
+
+    const [afterSecond] = await db
+      .select()
+      .from(sendJobs)
+      .where(eq(sendJobs.id, "send_job_unknown"))
+      .limit(1);
+    expect(afterSecond?.status).toBe("failed");
+    expect(afterSecond?.attemptCount).toBe(3);
+    expect(afterSecond?.processedAt).not.toBeNull();
+
+    const attempts = await db
+      .select()
+      .from(deliveryAttempts)
+      .where(eq(deliveryAttempts.sendJobId, "send_job_unknown"));
+    expect(attempts).toHaveLength(2);
+    expect(attempts.every((attempt) => attempt.status === "failed")).toBe(true);
   });
 
   it("writes delivery attempt and marks send job failed for non-retryable failure", async () => {
