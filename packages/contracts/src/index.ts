@@ -1,3 +1,4 @@
+export * from "./auth.js";
 export * from "./campaigns.js";
 export * from "./contacts.js";
 export * from "./health.js";

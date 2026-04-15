@@ -2,12 +2,13 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useMemo, useState } from "react";
 
 import { useAppContext } from "../lib/app-context";
+import { asErrorMessage } from "../lib/format";
 
 const navItems = [
-  { to: "/workspace-config", label: "Workspace Config" },
-  { to: "/contacts", label: "Contacts" },
-  { to: "/templates", label: "Templates" },
-  { to: "/campaigns", label: "Campaigns" },
+  { to: "/workspace-config", label: "发件配置" },
+  { to: "/contacts", label: "联系人" },
+  { to: "/templates", label: "模板" },
+  { to: "/campaigns", label: "活动" },
 ];
 
 function NavItem(props: { to: string; label: string }) {
@@ -24,20 +25,28 @@ function NavItem(props: { to: string; label: string }) {
 }
 
 export function AppShell() {
-  const { devContext, setDevContext } = useAppContext();
-  const [showContext, setShowContext] = useState(false);
-  const [draft, setDraft] = useState(devContext);
+  const { session, switchWorkspace, logout } = useAppContext();
+  const [switching, setSwitching] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const workspaceLabel = useMemo(() => {
-    return `${devContext.workspaceId} / ${devContext.userId}`;
-  }, [devContext]);
+  const userLabel = useMemo(() => {
+    if (!session) {
+      return "-";
+    }
+
+    return `${session.user.email} (${session.currentWorkspaceRole})`;
+  }, [session]);
+
+  if (!session) {
+    return null;
+  }
 
   return (
     <div className="app-shell">
       <aside className="side-nav">
         <div>
           <h1>SmartSend</h1>
-          <p>Product Web App</p>
+          <p>正式前端应用</p>
         </div>
         <nav>
           {navItems.map((item) => (
@@ -49,72 +58,47 @@ export function AppShell() {
       <main className="main-content">
         <header className="top-bar">
           <div>
-            <strong>Active Context</strong>
-            <div className="muted">{workspaceLabel}</div>
+            <strong>当前用户</strong>
+            <div className="muted">{userLabel}</div>
           </div>
-          <button type="button" onClick={() => setShowContext((v) => !v)}>
-            {showContext ? "Hide Dev Context" : "Edit Dev Context"}
-          </button>
-        </header>
-
-        {showContext ? (
-          <section className="card context-card">
-            <div className="form-grid two-col">
-              <label>
-                User ID
-                <input
-                  value={draft.userId}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, userId: event.target.value }))
+          <div className="top-actions">
+            <label className="workspace-switcher">
+              工作区
+              <select
+                disabled={switching}
+                value={session.currentWorkspaceId}
+                onChange={async (event) => {
+                  setSwitching(true);
+                  setMessage("");
+                  try {
+                    await switchWorkspace(event.target.value);
+                    setMessage("工作区已切换。");
+                  } catch (error) {
+                    setMessage(asErrorMessage(error));
+                  } finally {
+                    setSwitching(false);
                   }
-                />
-              </label>
-              <label>
-                Workspace ID
-                <input
-                  value={draft.workspaceId}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, workspaceId: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                User Email
-                <input
-                  value={draft.userEmail}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, userEmail: event.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                User Name
-                <input
-                  value={draft.userName}
-                  onChange={(event) =>
-                    setDraft((prev) => ({ ...prev, userName: event.target.value }))
-                  }
-                />
-              </label>
-            </div>
-            <div className="actions">
-              <button
-                type="button"
-                onClick={() => {
-                  setDevContext({
-                    ...draft,
-                    userId: draft.userId.trim(),
-                    workspaceId: draft.workspaceId.trim(),
-                    userEmail: draft.userEmail.trim(),
-                    userName: draft.userName.trim(),
-                  });
                 }}
               >
-                Save Context
-              </button>
-            </div>
-          </section>
-        ) : null}
+                {session.workspaces.map((item) => (
+                  <option key={item.workspaceId} value={item.workspaceId}>
+                    {item.workspaceName} ({item.role})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                void logout();
+              }}
+            >
+              退出登录
+            </button>
+          </div>
+        </header>
+
+        {message ? <p className="status-text">{message}</p> : null}
 
         <Outlet />
       </main>

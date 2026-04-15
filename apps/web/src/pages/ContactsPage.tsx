@@ -62,7 +62,7 @@ export function ContactsPage() {
 
       setForm(defaultForm);
       await loadContacts();
-      setMessage("Contact created.");
+      setMessage("联系人已创建。");
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -77,7 +77,7 @@ export function ContactsPage() {
       const parsed = JSON.parse(importJson) as unknown[];
       await apiClient.importContacts(parsed);
       await loadContacts();
-      setMessage(`Imported ${parsed.length} contacts.`);
+      setMessage(`已导入 ${parsed.length} 个联系人。`);
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -91,7 +91,7 @@ export function ContactsPage() {
     try {
       await apiClient.removeContact(contactId);
       await loadContacts();
-      setMessage(`Deleted contact ${contactId}.`);
+      setMessage(`已删除联系人 ${contactId}。`);
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -105,11 +105,11 @@ export function ContactsPage() {
 
   return (
     <section className="card">
-      <h2>Contacts</h2>
-      <p className="muted">Create and import recipients used by campaign queueing.</p>
+      <h2>联系人</h2>
+      <p className="muted">创建并导入用于 campaign 入队发送的收件人。</p>
       <div className="form-grid three-col">
         <label>
-          Email
+          邮箱
           <input
             type="email"
             value={form.email}
@@ -117,31 +117,31 @@ export function ContactsPage() {
           />
         </label>
         <label>
-          Name
+          姓名
           <input
             value={form.name}
             onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
           />
         </label>
         <label>
-          Company
+          公司
           <input
             value={form.company}
             onChange={(event) => setForm((prev) => ({ ...prev, company: event.target.value }))}
           />
         </label>
         <label>
-          Group
+          分组
           <input
             value={form.groupName}
-            placeholder={groups || "example-group"}
+            placeholder={groups || "示例分组"}
             onChange={(event) => setForm((prev) => ({ ...prev, groupName: event.target.value }))}
           />
         </label>
         <label className="span-two">
-          Custom Fields JSON
+          自定义字段 JSON
           <input
-            placeholder='{"title":"Engineer"}'
+            placeholder='{"title":"工程师"}'
             value={form.customFieldsJson}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, customFieldsJson: event.target.value }))
@@ -151,25 +151,25 @@ export function ContactsPage() {
       </div>
       <div className="actions">
         <button disabled={loading} type="button" onClick={() => void createContact()}>
-          Create Contact
+          创建联系人
         </button>
         <button disabled={loading} type="button" onClick={() => void loadContacts()}>
-          Refresh
+          刷新
         </button>
       </div>
 
       <label>
-        Bulk Import JSON Array
+        批量导入 JSON 数组
         <textarea
           rows={5}
           value={importJson}
           onChange={(event) => setImportJson(event.target.value)}
-          placeholder='[{"email":"a@example.com","name":"A"}]'
+          placeholder='[{"email":"a@example.com","name":"张三"}]'
         />
       </label>
       <div className="actions">
         <button disabled={loading} type="button" onClick={() => void bulkImport()}>
-          Import Contacts
+          导入联系人
         </button>
       </div>
 
@@ -179,10 +179,10 @@ export function ContactsPage() {
         <table>
           <thead>
             <tr>
-              <th>Email</th>
-              <th>Name</th>
-              <th>Group</th>
-              <th>Company</th>
+              <th>邮箱</th>
+              <th>姓名</th>
+              <th>分组</th>
+              <th>公司</th>
               <th></th>
             </tr>
           </thead>
@@ -200,7 +200,7 @@ export function ContactsPage() {
                     disabled={loading}
                     onClick={() => void removeContact(item.id)}
                   >
-                    Delete
+                    删除
                   </button>
                 </td>
               </tr>
@@ -208,7 +208,7 @@ export function ContactsPage() {
             {contacts.length === 0 ? (
               <tr>
                 <td colSpan={5} className="empty-cell">
-                  No contacts.
+                  暂无联系人。
                 </td>
               </tr>
             ) : null}

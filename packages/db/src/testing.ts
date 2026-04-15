@@ -1,4 +1,5 @@
 import {
+  authSessions,
   auditLogs,
   campaigns,
   contacts,
@@ -23,6 +24,7 @@ type WorkspaceSendingConfigInsert = typeof workspaceSendingConfigs.$inferInsert;
 
 export async function resetIntegrationTestDatabase(db: Database) {
   await db.delete(auditLogs);
+  await db.delete(authSessions);
   await db.delete(deliveryAttempts);
   await db.delete(workspaceSendingConfigs);
   await db.delete(sendJobs);

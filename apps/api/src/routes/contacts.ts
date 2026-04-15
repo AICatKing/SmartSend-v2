@@ -7,7 +7,7 @@ import {
   updateContact,
 } from "@smartsend/domain";
 
-import { requireApiContext } from "./helpers.js";
+import { requireApiContext, safeRecordAudit } from "./helpers.js";
 
 export async function registerContactRoutes(
   app: FastifyInstance<any, any, any, any>,
@@ -32,7 +32,7 @@ export async function registerContactRoutes(
       contact: body.contact ?? body,
     });
 
-    await app.services.auditAdapter.record({
+    await safeRecordAudit(request, {
       action: "contact.create",
       actorUserId: request.apiContext.user.id,
       workspaceId: request.apiContext.currentWorkspaceId,
@@ -55,7 +55,7 @@ export async function registerContactRoutes(
         patch: request.body,
       });
 
-      await app.services.auditAdapter.record({
+      await safeRecordAudit(request, {
         action: "contact.update",
         actorUserId: request.apiContext.user.id,
         workspaceId: request.apiContext.currentWorkspaceId,
@@ -78,7 +78,7 @@ export async function registerContactRoutes(
         contactId: params.contactId,
       });
 
-      await app.services.auditAdapter.record({
+      await safeRecordAudit(request, {
         action: "contact.remove",
         actorUserId: request.apiContext.user.id,
         workspaceId: request.apiContext.currentWorkspaceId,
@@ -101,7 +101,7 @@ export async function registerContactRoutes(
         contacts: body.contacts,
       });
 
-      await app.services.auditAdapter.record({
+      await safeRecordAudit(request, {
         action: "contact.import",
         actorUserId: request.apiContext.user.id,
         workspaceId: request.apiContext.currentWorkspaceId,

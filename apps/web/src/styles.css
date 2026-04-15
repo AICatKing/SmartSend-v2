@@ -143,6 +143,16 @@ button:disabled {
   align-content: start;
 }
 
+.top-actions {
+  display: flex;
+  align-items: end;
+  gap: 0.6rem;
+}
+
+.workspace-switcher {
+  min-width: 260px;
+}
+
 .top-bar {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -279,4 +289,22 @@ th {
     gap: 0.75rem;
     align-items: flex-start;
   }
+}
+
+.loading-page,
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.login-card {
+  width: min(520px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  padding: 1rem;
+  display: grid;
+  gap: 0.8rem;
 }

@@ -7,7 +7,7 @@ import {
   updateTemplate,
 } from "@smartsend/domain";
 
-import { requireApiContext } from "./helpers.js";
+import { requireApiContext, safeRecordAudit } from "./helpers.js";
 
 export async function registerTemplateRoutes(
   app: FastifyInstance<any, any, any, any>,
@@ -30,7 +30,7 @@ export async function registerTemplateRoutes(
       template: body.template ?? body,
     });
 
-    await app.services.auditAdapter.record({
+    await safeRecordAudit(request, {
       action: "template.create",
       actorUserId: request.apiContext.user.id,
       workspaceId: request.apiContext.currentWorkspaceId,
@@ -53,7 +53,7 @@ export async function registerTemplateRoutes(
         patch: request.body,
       });
 
-      await app.services.auditAdapter.record({
+      await safeRecordAudit(request, {
         action: "template.update",
         actorUserId: request.apiContext.user.id,
         workspaceId: request.apiContext.currentWorkspaceId,
@@ -76,7 +76,7 @@ export async function registerTemplateRoutes(
         templateId: params.templateId,
       });
 
-      await app.services.auditAdapter.record({
+      await safeRecordAudit(request, {
         action: "template.remove",
         actorUserId: request.apiContext.user.id,
         workspaceId: request.apiContext.currentWorkspaceId,

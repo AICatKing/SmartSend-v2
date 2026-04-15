@@ -72,7 +72,7 @@ export function CampaignsPage() {
       setDraftName("");
       await refreshDependencies();
       setSelectedCampaignId(output.campaign.id);
-      setMessage(`Draft created: ${output.campaign.id}`);
+      setMessage(`草稿已创建：${output.campaign.id}`);
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -82,7 +82,7 @@ export function CampaignsPage() {
 
   async function queueSelectedCampaign() {
     if (!selectedCampaignId) {
-      setMessage("Select a campaign first.");
+      setMessage("请先选择一个活动。");
       return;
     }
 
@@ -99,7 +99,7 @@ export function CampaignsPage() {
         loadSendJobs(output.campaignId),
         loadRecentFailures(output.campaignId),
       ]);
-      setMessage(`Campaign queued. send_jobs=${output.queuedCount}`);
+      setMessage(`活动已入队，send_jobs=${output.queuedCount}`);
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -174,18 +174,18 @@ export function CampaignsPage() {
 
   return (
     <section className="card">
-      <h2>Campaigns</h2>
-      <p className="muted">Create draft, queue, then track progress and delivery state.</p>
+      <h2>活动</h2>
+      <p className="muted">创建草稿、执行入队，并跟踪发送进度与状态。</p>
 
       <div className="form-grid three-col">
         <label>
-          Draft Name
+          草稿名称
           <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
         </label>
         <label>
-          Template
+          模板
           <select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
-            <option value="">Select template</option>
+            <option value="">请选择模板</option>
             {templates.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name} ({item.id})
@@ -194,17 +194,17 @@ export function CampaignsPage() {
           </select>
         </label>
         <label>
-          Target Type
+          目标类型
           <select
             value={targetType}
             onChange={(event) => setTargetType(event.target.value as "all_contacts" | "group_name")}
           >
-            <option value="all_contacts">all_contacts</option>
-            <option value="group_name">group_name</option>
+            <option value="all_contacts">all_contacts（全部联系人）</option>
+            <option value="group_name">group_name（按分组）</option>
           </select>
         </label>
         <label>
-          Target Group Name
+          目标分组名
           <input
             value={targetGroupName}
             disabled={targetType !== "group_name"}
@@ -214,21 +214,21 @@ export function CampaignsPage() {
       </div>
       <div className="actions">
         <button disabled={loading} type="button" onClick={() => void createDraft()}>
-          Create Draft
+          创建草稿
         </button>
         <button disabled={loading} type="button" onClick={() => void refreshCampaigns()}>
-          Refresh Campaigns
+          刷新活动列表
         </button>
       </div>
 
       <div className="form-grid three-col">
         <label>
-          Selected Campaign
+          已选活动
           <select
             value={selectedCampaignId}
             onChange={(event) => setSelectedCampaignId(event.target.value)}
           >
-            <option value="">Select campaign</option>
+            <option value="">请选择活动</option>
             {campaigns.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name} | {item.status} | {item.id}
@@ -237,7 +237,7 @@ export function CampaignsPage() {
           </select>
         </label>
         <label>
-          Max Attempts
+          最大重试次数
           <input
             type="number"
             min={1}
@@ -247,9 +247,9 @@ export function CampaignsPage() {
           />
         </label>
         <label>
-          Progress Polling
+          进度轮询
           <select value={pollMs} onChange={(event) => setPollMs(Number(event.target.value))}>
-            <option value={0}>off</option>
+            <option value={0}>关闭</option>
             <option value={3000}>3s</option>
             <option value={5000}>5s</option>
           </select>
@@ -257,10 +257,10 @@ export function CampaignsPage() {
       </div>
       <div className="actions">
         <button disabled={loading || !selectedCampaignId} type="button" onClick={() => void queueSelectedCampaign()}>
-          Queue Campaign
+          入队活动
         </button>
         <button disabled={loading || !selectedCampaignId} type="button" onClick={() => void refreshSelectedCampaignDetails()}>
-          Refresh Progress / Jobs / Failures
+          刷新进度 / 任务 / 失败记录
         </button>
       </div>
 
@@ -269,15 +269,15 @@ export function CampaignsPage() {
       {selectedCampaign ? (
         <div className="metrics-grid">
           <article>
-            <span className="metric-label">Campaign Status</span>
+            <span className="metric-label">活动状态</span>
             <strong>{selectedCampaign.status}</strong>
           </article>
           <article>
-            <span className="metric-label">Queued At</span>
+            <span className="metric-label">入队时间</span>
             <strong>{formatDateTime(selectedCampaign.queuedAt)}</strong>
           </article>
           <article>
-            <span className="metric-label">Target</span>
+            <span className="metric-label">目标</span>
             <strong>
               {selectedCampaign.target.type === "group_name"
                 ? `group_name:${selectedCampaign.target.groupName}`
@@ -290,41 +290,41 @@ export function CampaignsPage() {
       {progress ? (
         <div className="metrics-grid">
           <article>
-            <span className="metric-label">Total</span>
+            <span className="metric-label">总数</span>
             <strong>{progress.total}</strong>
           </article>
           <article>
-            <span className="metric-label">Pending</span>
+            <span className="metric-label">待处理</span>
             <strong>{progress.pending}</strong>
           </article>
           <article>
-            <span className="metric-label">Processing</span>
+            <span className="metric-label">处理中</span>
             <strong>{progress.processing}</strong>
           </article>
           <article>
-            <span className="metric-label">Sent</span>
+            <span className="metric-label">已发送</span>
             <strong>{progress.sent}</strong>
           </article>
           <article>
-            <span className="metric-label">Failed</span>
+            <span className="metric-label">失败</span>
             <strong>{progress.failed}</strong>
           </article>
           <article>
-            <span className="metric-label">Cancelled</span>
+            <span className="metric-label">已取消</span>
             <strong>{progress.cancelled}</strong>
           </article>
         </div>
       ) : null}
 
-      <h3>Campaign List</h3>
+      <h3>活动列表</h3>
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Template</th>
-              <th>Queued At</th>
+              <th>名称</th>
+              <th>状态</th>
+              <th>模板</th>
+              <th>入队时间</th>
             </tr>
           </thead>
           <tbody>
@@ -339,7 +339,7 @@ export function CampaignsPage() {
             {campaigns.length === 0 ? (
               <tr>
                 <td colSpan={4} className="empty-cell">
-                  No campaigns.
+                  暂无活动。
                 </td>
               </tr>
             ) : null}
@@ -347,16 +347,16 @@ export function CampaignsPage() {
         </table>
       </div>
 
-      <h3>Send Jobs</h3>
+      <h3>发送任务</h3>
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>Recipient</th>
-              <th>Status</th>
-              <th>Attempt</th>
-              <th>Scheduled At</th>
-              <th>Error</th>
+              <th>收件人</th>
+              <th>状态</th>
+              <th>尝试次数</th>
+              <th>计划时间</th>
+              <th>错误</th>
             </tr>
           </thead>
           <tbody>
@@ -374,7 +374,7 @@ export function CampaignsPage() {
             {sendJobs.length === 0 ? (
               <tr>
                 <td colSpan={5} className="empty-cell">
-                  No send jobs.
+                  暂无发送任务。
                 </td>
               </tr>
             ) : null}
@@ -382,15 +382,15 @@ export function CampaignsPage() {
         </table>
       </div>
 
-      <h3>Recent Failures</h3>
+      <h3>近期失败记录</h3>
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>Recipient</th>
-              <th>Status</th>
-              <th>Error</th>
-              <th>Completed At</th>
+              <th>收件人</th>
+              <th>状态</th>
+              <th>错误</th>
+              <th>完成时间</th>
             </tr>
           </thead>
           <tbody>
@@ -405,7 +405,7 @@ export function CampaignsPage() {
             {recentFailures.length === 0 ? (
               <tr>
                 <td colSpan={4} className="empty-cell">
-                  No recent failures.
+                  暂无失败记录。
                 </td>
               </tr>
             ) : null}

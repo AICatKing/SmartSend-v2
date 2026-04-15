@@ -1,13 +1,13 @@
 import { ConfigError } from "@smartsend/shared";
 
 import { apiEnv } from "../env.js";
-import { createBetterAuthAdapterPlaceholder } from "./better-auth.js";
+import { createBetterAuthAdapter } from "./better-auth.js";
 import { createDevHeaderAuthAdapter } from "./dev-header-auth.js";
 import type { AuthAdapter } from "./types.js";
 
 export function createAuthAdapter(): AuthAdapter {
   if (apiEnv.AUTH_MODE === "better_auth") {
-    return createBetterAuthAdapterPlaceholder();
+    return createBetterAuthAdapter();
   }
 
   if (apiEnv.NODE_ENV === "production") {

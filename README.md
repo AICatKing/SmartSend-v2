@@ -37,9 +37,18 @@ Worker/local async shim currently requires:
 - `API_ENCRYPTION_KEY`
 - `PROVIDER_MODE`
 
+API auth/session currently uses:
+
+- `AUTH_MODE` (default `better_auth`)
+- `AUTH_SESSION_COOKIE_NAME` (default `smartsend_session`)
+- `AUTH_SESSION_TTL_DAYS` (default `30`)
+
 Recommended local values:
 
 ```bash
+AUTH_MODE=better_auth
+AUTH_SESSION_COOKIE_NAME=smartsend_session
+AUTH_SESSION_TTL_DAYS=30
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/smartsend
 TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/smartsend_test
 API_ENCRYPTION_KEY=replace-with-at-least-32-characters
@@ -48,6 +57,8 @@ PROVIDER_MODE=mock
 
 Notes:
 
+- `AUTH_MODE=better_auth` is the product frontend path and uses real database-backed session context from cookie.
+- `AUTH_MODE=dev_headers` remains available only for explicit local debugging (`/app` and manual header calls).
 - `DATABASE_URL` is the development database. `TEST_DATABASE_URL` must point to a separate database used only for integration tests.
 - `API_ENCRYPTION_KEY` must match the key used by `apps/api`, otherwise the worker cannot decrypt `workspace_sending_configs.encrypted_api_key`.
 - `PROVIDER_MODE=mock` is the default local development mode.
@@ -108,6 +119,13 @@ Default local URL:
 open http://127.0.0.1:5173
 ```
 
+Local auth flow:
+
+1. open `apps/web`
+2. login with an email (name optional)
+3. first login auto-provisions one workspace + owner membership for that user if no membership exists
+4. after login, switch workspace in the top bar selector if needed
+
 `apps/web` uses Vite dev proxy and forwards `/api` requests to `http://127.0.0.1:3000` by default.
 
 Optional override when API runs on a different origin:
@@ -118,6 +136,7 @@ WEB_API_TARGET=http://127.0.0.1:3100 npm run dev:web
 
 Product pages currently cover the minimum real loop:
 
+- login / session / workspace switch
 - workspace sending config get/upsert
 - contacts list/create/import/delete
 - templates list/create/delete
@@ -126,7 +145,7 @@ Product pages currently cover the minimum real loop:
 
 ## `/app` Integration Tool Page
 
-The old integration tool page is still available for backend debugging only:
+The old integration tool page is still available for backend debugging only (requires `AUTH_MODE=dev_headers`):
 
 ```bash
 open http://127.0.0.1:3000/app
@@ -277,7 +296,7 @@ Boundary:
 4. Start `apps/api`.
 5. Start `apps/web`.
 6. Start `apps/worker` with `PROVIDER_MODE=mock`.
-7. In `apps/web`, complete: workspace config -> contacts -> templates -> campaigns.
+7. In `apps/web`, login first, then complete: workspace config -> contacts -> templates -> campaigns.
 8. In `Campaigns` page, create draft and queue it.
 9. Call `POST /internal/consume-once` on the local async shim.
 10. Back in `Campaigns` page, refresh progress/send-jobs/recent-failures.
@@ -360,6 +379,7 @@ curl -H 'x-dev-user-id: user_local_owner' \
 
 ## Minimal Local `/app` Debug Flow
 
+0. Set `AUTH_MODE=dev_headers` before starting `apps/api`.
 1. Start Postgres and run `npm run db:migrate`.
 2. Run `npm run db:seed:local`.
 3. Start API: `npm run dev:api`.

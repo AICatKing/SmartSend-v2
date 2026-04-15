@@ -1,4 +1,11 @@
 import {
+  authListWorkspacesOutputSchema,
+  authLoginInputSchema,
+  authLoginOutputSchema,
+  authLogoutOutputSchema,
+  authMeOutputSchema,
+  authSwitchWorkspaceInputSchema,
+  authSwitchWorkspaceOutputSchema,
   campaignCreateDraftInputSchema,
   campaignCreateDraftOutputSchema,
   campaignListOutputSchema,
@@ -20,7 +27,6 @@ import {
   workspaceSendingConfigUpsertInputSchema,
   workspaceSendingConfigUpsertOutputSchema,
 } from "@smartsend/contracts";
-import type { DevContext } from "./dev-context";
 
 export class ApiClientError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
@@ -49,7 +55,46 @@ const defaultJsonHeaders = {
 };
 
 export class ApiClient {
-  constructor(private readonly getContext: () => DevContext) {}
+  async login(input: unknown) {
+    const body = authLoginInputSchema.parse(input);
+
+    const data = await this.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: defaultJsonHeaders,
+    });
+
+    return authLoginOutputSchema.parse(data);
+  }
+
+  async logout() {
+    const data = await this.request("/api/auth/logout", {
+      method: "POST",
+    });
+
+    return authLogoutOutputSchema.parse(data);
+  }
+
+  async getMe() {
+    const data = await this.request("/api/auth/me");
+    return authMeOutputSchema.parse(data);
+  }
+
+  async listWorkspaces() {
+    const data = await this.request("/api/auth/workspaces");
+    return authListWorkspacesOutputSchema.parse(data);
+  }
+
+  async switchWorkspace(workspaceId: string) {
+    const body = authSwitchWorkspaceInputSchema.parse({ workspaceId });
+    const data = await this.request("/api/auth/switch-workspace", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: defaultJsonHeaders,
+    });
+
+    return authSwitchWorkspaceOutputSchema.parse(data);
+  }
 
   async getWorkspaceSendingConfig() {
     const data = await this.request("/api/workspace-sending-config");
@@ -178,14 +223,10 @@ export class ApiClient {
   }
 
   private async request(path: string, init: RequestInit = {}) {
-    const context = this.getContext();
     const response = await fetch(path, {
       ...init,
+      credentials: "include",
       headers: {
-        "x-dev-user-id": context.userId,
-        "x-dev-workspace-id": context.workspaceId,
-        ...(context.userEmail ? { "x-dev-user-email": context.userEmail } : {}),
-        ...(context.userName ? { "x-dev-user-name": context.userName } : {}),
         ...(init.headers ?? {}),
       },
     });

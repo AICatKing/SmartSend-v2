@@ -9,7 +9,7 @@ import {
   queueCampaign,
 } from "@smartsend/domain";
 
-import { requireApiContext } from "./helpers.js";
+import { requireApiContext, safeRecordAudit } from "./helpers.js";
 
 export async function registerCampaignRoutes(
   app: FastifyInstance<any, any, any, any>,
@@ -68,7 +68,7 @@ export async function registerCampaignRoutes(
                 cause: error,
               });
 
-        await app.services.auditAdapter.record({
+        await safeRecordAudit(request, {
           action: "campaign.queueCampaign.failed",
           actorUserId: request.apiContext.user.id,
           workspaceId: request.apiContext.currentWorkspaceId,

@@ -14,6 +14,8 @@ import {
   seedWorkspaceMembershipFixture,
 } from "@smartsend/db";
 
+import { createBetterAuthAdapter } from "./auth/better-auth.js";
+import { createDevHeaderAuthAdapter } from "./auth/dev-header-auth.js";
 import { createApiApp } from "./app.js";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -73,12 +75,17 @@ integration("api protected routes", () => {
     });
   });
 
-  it("rejects unauthenticated protected requests", async () => {
-    const app = createApiApp({
+  function createTestApp() {
+    return createApiApp({
       services: {
         db,
+        authAdapter: createDevHeaderAuthAdapter(),
       },
     });
+  }
+
+  it("rejects unauthenticated protected requests", async () => {
+    const app = createTestApp();
     await app.ready();
 
     const response = await app.inject({
@@ -91,11 +98,7 @@ integration("api protected routes", () => {
   });
 
   it("rejects requests outside workspace membership", async () => {
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const response = await app.inject({
@@ -127,11 +130,7 @@ integration("api protected routes", () => {
       customFields: {},
     });
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const response = await app.inject({
@@ -158,11 +157,7 @@ integration("api protected routes", () => {
   });
 
   it("renders template preview and reports missing variables", async () => {
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const response = await app.inject({
@@ -202,6 +197,7 @@ integration("api protected routes", () => {
     const app = createApiApp({
       services: {
         db,
+        authAdapter: createDevHeaderAuthAdapter(),
         secretBox: {
           encrypt(value: string) {
             return `enc:${value}`;
@@ -264,11 +260,7 @@ integration("api protected routes", () => {
   });
 
   it("writes audit logs for contact create, update, remove, and import", async () => {
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const create = await app.inject({
@@ -363,11 +355,7 @@ integration("api protected routes", () => {
   });
 
   it("writes audit logs for template create, update, and remove", async () => {
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const create = await app.inject({
@@ -458,11 +446,7 @@ integration("api protected routes", () => {
       customFields: {},
     });
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const draft = await app.inject({
@@ -545,11 +529,7 @@ integration("api protected routes", () => {
       customFields: {},
     });
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const draft = await app.inject({
@@ -613,11 +593,7 @@ integration("api protected routes", () => {
       targetGroupName: null,
     });
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const response = await app.inject({
@@ -643,11 +619,7 @@ integration("api protected routes", () => {
       bodyHtml: "<p>{{name}}</p>",
     });
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const draft = await app.inject({
@@ -715,11 +687,7 @@ integration("api protected routes", () => {
       customFields: {},
     });
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const draft = await app.inject({
@@ -838,11 +806,7 @@ integration("api protected routes", () => {
       targetGroupName: null,
     });
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const all = await app.inject({
@@ -993,11 +957,7 @@ integration("api protected routes", () => {
       },
     ]);
 
-    const app = createApiApp({
-      services: {
-        db,
-      },
-    });
+    const app = createTestApp();
     await app.ready();
 
     const response = await app.inject({
@@ -1034,4 +994,80 @@ integration("api protected routes", () => {
 
     await app.close();
   });
+
+  it("supports cookie session login -> me -> logout flow", async () => {
+    const app = createApiApp({
+      services: {
+        db,
+        authAdapter: createBetterAuthAdapter(),
+      },
+    });
+    await app.ready();
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: {
+        email: "user1@example.com",
+      },
+    });
+
+    expect(login.statusCode).toBe(200);
+    const cookie = extractCookieHeader(login.headers["set-cookie"]);
+    expect(cookie).toContain("smartsend_session=");
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: {
+        cookie,
+      },
+    });
+
+    expect(me.statusCode).toBe(200);
+    const mePayload = me.json() as {
+      user: { email: string };
+      currentWorkspaceId: string;
+      workspaces: Array<{ workspaceId: string }>;
+    };
+    expect(mePayload.user.email).toBe("user1@example.com");
+    expect(mePayload.currentWorkspaceId).toBe("ws_1");
+    expect(mePayload.workspaces).toHaveLength(1);
+
+    const logout = await app.inject({
+      method: "POST",
+      url: "/api/auth/logout",
+      headers: {
+        cookie,
+      },
+    });
+
+    expect(logout.statusCode).toBe(200);
+
+    const meAfterLogout = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: {
+        cookie,
+      },
+    });
+
+    expect(meAfterLogout.statusCode).toBe(401);
+    await app.close();
+  });
 });
+
+function extractCookieHeader(header: string | string[] | undefined) {
+  if (!header) {
+    throw new Error("Expected set-cookie header.");
+  }
+
+  const value = Array.isArray(header) ? header[0] : header;
+  const [cookie] = value.split(";");
+
+  if (!cookie) {
+    throw new Error("Expected cookie value.");
+  }
+
+  return cookie;
+}

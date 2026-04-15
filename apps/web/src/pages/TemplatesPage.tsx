@@ -42,7 +42,7 @@ export function TemplatesPage() {
       await apiClient.createTemplate(form);
       setForm(defaultForm);
       await loadTemplates();
-      setMessage("Template created.");
+      setMessage("模板已创建。");
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -56,7 +56,7 @@ export function TemplatesPage() {
     try {
       await apiClient.removeTemplate(templateId);
       await loadTemplates();
-      setMessage(`Deleted template ${templateId}.`);
+      setMessage(`已删除模板 ${templateId}。`);
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -70,41 +70,41 @@ export function TemplatesPage() {
 
   return (
     <section className="card">
-      <h2>Templates</h2>
-      <p className="muted">Create reusable email content for campaign drafts.</p>
+      <h2>模板</h2>
+      <p className="muted">创建可复用的邮件内容，用于 campaign 草稿。</p>
       <div className="form-grid two-col">
         <label>
-          Name
+          模板名称
           <input
             value={form.name}
             onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
           />
         </label>
         <label>
-          Subject
+          主题
           <input
             value={form.subject}
             onChange={(event) => setForm((prev) => ({ ...prev, subject: event.target.value }))}
           />
         </label>
         <label className="span-all">
-          Body HTML
+          正文 HTML
           <textarea
             rows={8}
             value={form.bodyHtml}
             onChange={(event) =>
               setForm((prev) => ({ ...prev, bodyHtml: event.target.value }))
             }
-            placeholder="<p>Hello {{name}}</p>"
+            placeholder="<p>你好 {{name}}</p>"
           />
         </label>
       </div>
       <div className="actions">
         <button disabled={loading} type="button" onClick={() => void createTemplate()}>
-          Create Template
+          创建模板
         </button>
         <button disabled={loading} type="button" onClick={() => void loadTemplates()}>
-          Refresh
+          刷新
         </button>
       </div>
       {message ? <p className="status-text">{message}</p> : null}
@@ -113,9 +113,9 @@ export function TemplatesPage() {
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Subject</th>
-              <th>Updated</th>
+              <th>模板名称</th>
+              <th>主题</th>
+              <th>更新时间</th>
               <th></th>
             </tr>
           </thead>
@@ -132,7 +132,7 @@ export function TemplatesPage() {
                     disabled={loading}
                     onClick={() => void removeTemplate(item.id)}
                   >
-                    Delete
+                    删除
                   </button>
                 </td>
               </tr>
@@ -140,7 +140,7 @@ export function TemplatesPage() {
             {templates.length === 0 ? (
               <tr>
                 <td colSpan={4} className="empty-cell">
-                  No templates.
+                  暂无模板。
                 </td>
               </tr>
             ) : null}

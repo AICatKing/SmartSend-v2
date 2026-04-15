@@ -5,7 +5,7 @@ import {
 } from "@smartsend/domain";
 import { workspaceSendingConfigUpsertInputSchema } from "@smartsend/contracts";
 
-import { requireApiContext } from "./helpers.js";
+import { requireApiContext, safeRecordAudit } from "./helpers.js";
 
 export async function registerWorkspaceSendingConfigRoutes(
   app: FastifyInstance<any, any, any, any>,
@@ -41,7 +41,7 @@ export async function registerWorkspaceSendingConfigRoutes(
         replyToEmail: body.replyToEmail ?? null,
         ...(encryptedApiKey !== undefined ? { encryptedApiKey } : {}),
       }).then(async (output) => {
-        await app.services.auditAdapter.record({
+        await safeRecordAudit(request, {
           action: "workspace_sending_config.upsert",
           actorUserId: request.apiContext.user.id,
           workspaceId: request.apiContext.currentWorkspaceId,
