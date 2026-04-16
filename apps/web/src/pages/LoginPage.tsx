@@ -19,7 +19,7 @@ export function LoginPage() {
     try {
       await requestLoginCode(email);
       setCodeSent(true);
-      setMessage("验证码已发送，请检查邮箱。");
+      setMessage("邮件已发送。已有账号会收到验证码；首次登录可能先收到确认邮箱邮件。");
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -48,7 +48,9 @@ export function LoginPage() {
     <main className="login-page">
       <section className="login-card">
         <h1>SmartSend 登录</h1>
-        <p className="muted">使用 Supabase 邮箱验证码登录，再进入 workspace 内业务资源。</p>
+        <p className="muted">
+          使用 Supabase 邮箱登录。已有账号通常会收到验证码；首次登录可能需要先确认邮箱。
+        </p>
         <label>
           邮箱
           <input
@@ -70,7 +72,7 @@ export function LoginPage() {
         ) : null}
         <div className="actions">
           <button disabled={sendingCode || !email.trim()} type="button" onClick={() => void sendCode()}>
-            {sendingCode ? "发送中..." : codeSent ? "重新发送验证码" : "发送验证码"}
+            {sendingCode ? "发送中..." : codeSent ? "重新发送邮件" : "发送登录邮件"}
           </button>
           {codeSent ? (
             <button
@@ -82,6 +84,9 @@ export function LoginPage() {
             </button>
           ) : null}
         </div>
+        <p className="muted">
+          如果你收到的是 “Confirm your signup” 邮件，请先点邮件里的确认链接，再回到这里输入验证码或重新发送登录邮件。
+        </p>
         {message ? <p className="status-text">{message}</p> : null}
         {authError ? <p className="status-text">{authError}</p> : null}
       </section>
