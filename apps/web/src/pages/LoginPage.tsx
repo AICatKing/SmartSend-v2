@@ -19,7 +19,7 @@ export function LoginPage() {
     try {
       await requestLoginCode(email);
       setCodeSent(true);
-      setMessage("邮件已发送。已有账号会收到验证码；首次登录可能先收到确认邮箱邮件。");
+      setMessage("登录邮件已发送。请在邮箱中查找 6 位验证码并填入下方。");
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -36,7 +36,7 @@ export function LoginPage() {
         email,
         token,
       });
-      setMessage("登录成功，正在进入系统...");
+      setMessage("验证成功，正在登录...");
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
@@ -49,7 +49,7 @@ export function LoginPage() {
       <section className="login-card">
         <h1>SmartSend 登录</h1>
         <p className="muted">
-          使用 Supabase 邮箱登录。已有账号通常会收到验证码；首次登录可能需要先确认邮箱。
+          输入邮箱以接收 6 位验证码登录。
         </p>
         <label>
           邮箱
@@ -66,13 +66,14 @@ export function LoginPage() {
             <input
               value={token}
               onChange={(event) => setToken(event.target.value)}
-              placeholder="输入 6 位验证码"
+              placeholder="000000"
+              maxLength={6}
             />
           </label>
         ) : null}
         <div className="actions">
           <button disabled={sendingCode || !email.trim()} type="button" onClick={() => void sendCode()}>
-            {sendingCode ? "发送中..." : codeSent ? "重新发送邮件" : "发送登录邮件"}
+            {sendingCode ? "正在发送..." : codeSent ? "重新发送验证码" : "获取验证码"}
           </button>
           {codeSent ? (
             <button
@@ -80,13 +81,15 @@ export function LoginPage() {
               type="button"
               onClick={() => void submitCode()}
             >
-              {verifyingCode ? "验证中..." : "验证并登录"}
+              {verifyingCode ? "正在验证..." : "登录"}
             </button>
           ) : null}
         </div>
-        <p className="muted">
-          如果你收到的是 “Confirm your signup” 邮件，请先点邮件里的确认链接，再回到这里输入验证码或重新发送登录邮件。
-        </p>
+        {codeSent && (
+          <p className="muted" style={{ marginTop: "1rem", fontSize: "0.85rem" }}>
+            提示：如果你是首次使用此邮箱，可能会先收到一封 “Confirm your signup” 邮件，请点击其中的链接激活账号后再返回此处重新获取验证码。
+          </p>
+        )}
         {message ? <p className="status-text">{message}</p> : null}
         {authError ? <p className="status-text">{authError}</p> : null}
       </section>

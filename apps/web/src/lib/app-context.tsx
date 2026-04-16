@@ -77,13 +77,10 @@ export function AppContextProvider(props: { children: ReactNode }) {
 
   async function requestLoginCode(email: string) {
     const normalizedEmail = email.trim().toLowerCase();
-    const emailRedirectTo =
-      typeof window !== "undefined" ? `${window.location.origin}/login` : null;
     const { error } = await supabaseClient.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
         shouldCreateUser: true,
-        ...(emailRedirectTo ? { emailRedirectTo } : {}),
       },
     });
 
