@@ -1,0 +1,15 @@
+{
+  "installCommand": "npm install",
+  "buildCommand": "npm run build:web",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

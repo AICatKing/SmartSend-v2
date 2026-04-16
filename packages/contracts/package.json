@@ -2,15 +2,18 @@
   "name": "@smartsend/contracts",
   "private": true,
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./dist/index.js"
   },
-  "types": "./src/index.ts",
+  "types": "./dist/index.d.ts",
   "scripts": {
+    "build": "node ../../scripts/build-workspace-package.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@smartsend/domain": "file:../domain",
     "zod": "^3.24.1"
   }
 }

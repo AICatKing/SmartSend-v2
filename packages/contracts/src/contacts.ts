@@ -3,7 +3,7 @@ import {
   contactCustomFieldsSchema,
   contactGroupNameSchema,
   entityIdSchema,
-} from "../../domain/src/contact.js";
+} from "./primitives.js";
 
 const isoDateTimeSchema = z.string().datetime();
 const emailSchema = z.string().trim().email().max(320);

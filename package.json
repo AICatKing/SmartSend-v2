@@ -10,6 +10,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
+    "build:runtime": "npm run build --workspace @smartsend/shared && npm run build --workspace @smartsend/contracts && npm run build --workspace @smartsend/db && npm run build --workspace @smartsend/domain",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev:api": "npm run dev --workspace @smartsend/api",
     "dev:web": "npm run dev --workspace @smartsend/web",

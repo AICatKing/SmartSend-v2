@@ -1,0 +1,9 @@
+{
+  "installCommand": "cd ../.. && npm install && npm run build:runtime && npm install",
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    }
+  ]
+}

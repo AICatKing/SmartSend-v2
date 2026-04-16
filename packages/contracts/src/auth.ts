@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { entityIdSchema } from "../../domain/src/contact.js";
-import { workspaceRoleSchema } from "../../domain/src/workspace.js";
+import { entityIdSchema, workspaceRoleSchema } from "./primitives.js";
 
 const emailSchema = z.string().trim().email().max(320);
 const nameSchema = z.string().trim().min(1).max(200);

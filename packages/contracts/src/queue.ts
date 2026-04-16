@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { entityIdSchema } from "../../domain/src/contact.js";
+import { entityIdSchema } from "./primitives.js";
 
 export const sendJobQueueMessageSchema = z.object({
   version: z.literal(1),

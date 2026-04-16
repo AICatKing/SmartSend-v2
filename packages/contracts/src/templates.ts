@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { entityIdSchema } from "../../domain/src/contact.js";
-import { templateRenderContextSchema } from "../../domain/src/template.js";
+import { entityIdSchema, templateRenderContextSchema } from "./primitives.js";
 
 const isoDateTimeSchema = z.string().datetime();
 const templateNameSchema = z.string().trim().min(1).max(200);

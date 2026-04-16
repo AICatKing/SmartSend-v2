@@ -12,6 +12,7 @@ import { registerApiRoutes } from "./routes/index.js";
 import { createApiServices, type ApiServices } from "./services.js";
 
 type CreateApiAppOptions = {
+  includeLegacyFrontend?: boolean;
   services?: Partial<Parameters<typeof createApiServices>[0]>;
 };
 
@@ -63,7 +64,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
     status: "ready",
   }));
 
-  app.get("/health", async (_, reply) => {
+  const healthHandler = async (_: unknown, reply: { status: (code: number) => { send: (payload: unknown) => unknown } }) => {
     const database = await getDatabaseHealth();
 
     const response = healthResponseSchema.parse({
@@ -75,9 +76,19 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
     });
 
     return reply.status(response.status === "ok" ? 200 : 503).send(response);
-  });
+  };
 
-  void registerApiRoutes(app);
+  app.get("/health", healthHandler);
+  app.get("/api/health", healthHandler);
+
+  void registerApiRoutes(
+    app,
+    options.includeLegacyFrontend === undefined
+      ? {}
+      : {
+          includeLegacyFrontend: options.includeLegacyFrontend,
+        },
+  );
 
   app.addHook("onClose", async () => {
     await services.close();

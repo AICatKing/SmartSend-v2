@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { asyncServiceIdSchema } from "../../domain/src/async-runtime.js";
+import { asyncServiceIdSchema } from "./primitives.js";
 
 export const healthDatabaseSchema = z.object({
   status: z.enum(["up", "down"]),

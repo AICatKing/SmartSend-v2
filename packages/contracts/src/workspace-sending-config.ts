@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { entityIdSchema } from "../../domain/src/contact.js";
-import { providerSchema } from "../../domain/src/provider.js";
+import { entityIdSchema, providerSchema } from "./primitives.js";
 
 const isoDateTimeSchema = z.string().datetime();
 const senderNameSchema = z.string().trim().min(1).max(200);

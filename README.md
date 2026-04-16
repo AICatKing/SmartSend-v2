@@ -17,6 +17,12 @@ Current intentionally deferred areas:
 - real Vercel Queues production integration
 - dashboard and rich reporting
 
+Current Vercel deployment shape:
+
+- `apps/web` can be deployed as the frontend SPA
+- `apps/api` can now be deployed as its own Vercel Functions project
+- `apps/worker` is still not a production Vercel deployment unit
+
 ## Prerequisites
 
 - Node.js `>= 22`
@@ -63,6 +69,7 @@ Notes:
 
 - `AUTH_MODE=supabase` is the product frontend path. `apps/web` uses Supabase email OTP login, and `apps/api` verifies the access token with `supabase.auth.getUser(jwt)`.
 - `AUTH_MODE=dev_headers` remains available only for explicit local debugging (`/app` and manual header calls).
+- `SUPABASE_URL` and `VITE_SUPABASE_URL` must be your real Supabase project origin such as `https://<project-ref>.supabase.co`, not your local site origin like `http://127.0.0.1:5173`.
 - `DATABASE_URL` is the development database. `TEST_DATABASE_URL` must point to a separate database used only for integration tests.
 - `API_ENCRYPTION_KEY` must match the key used by `apps/api`, otherwise the worker cannot decrypt `workspace_sending_configs.encrypted_api_key`.
 - `PROVIDER_MODE=mock` is the default local development mode.
@@ -162,11 +169,12 @@ Requirements:
 Current limitation:
 
 - this only deploys the frontend SPA
-- `apps/api` and `apps/worker` are not yet production-ready Vercel deployment units
+- `apps/worker` is not yet a production-ready Vercel deployment unit
 
 Detailed setup notes:
 
 - see [docs/web-vercel-deploy.md](/Users/hugh/code/personal/SmartSend-v2/docs/web-vercel-deploy.md)
+- see [docs/api-vercel-functions.md](/Users/hugh/code/personal/SmartSend-v2/docs/api-vercel-functions.md)
 
 ## `/app` Integration Tool Page
 

@@ -10,5 +10,18 @@ export function createBrowserSupabaseClient() {
     );
   }
 
+  const parsedUrl = new URL(supabaseUrl);
+  const hostname = parsedUrl.hostname.toLowerCase();
+
+  if (
+    hostname === "127.0.0.1" ||
+    hostname === "localhost" ||
+    !hostname.endsWith(".supabase.co")
+  ) {
+    throw new Error(
+      "VITE_SUPABASE_URL must point to your Supabase project host, for example https://<project-ref>.supabase.co.",
+    );
+  }
+
   return createClient(supabaseUrl, supabaseAnonKey);
 }

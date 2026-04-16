@@ -1,7 +1,7 @@
 import { loadEnvFiles, parseEnv } from "@smartsend/shared";
 import { z } from "zod";
 
-loadEnvFiles(import.meta.url);
+loadEnvFiles();
 
 const localAsyncShimEnvSchema = z
   .object({

@@ -1,0 +1,9 @@
+{
+  "installCommand": "npm install",
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    }
+  ]
+}

@@ -4,8 +4,8 @@ import {
   campaignStatusSchema,
   campaignTargetSchema,
   sendJobStatusSchema,
-} from "../../domain/src/campaign.js";
-import { entityIdSchema } from "../../domain/src/contact.js";
+  entityIdSchema,
+} from "./primitives.js";
 
 const isoDateTimeSchema = z.string().datetime();
 

@@ -1,7 +1,7 @@
 import { loadEnvFiles, parseEnv } from "@smartsend/shared";
 import { z } from "zod";
 
-loadEnvFiles(import.meta.url);
+loadEnvFiles();
 
 export const apiEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

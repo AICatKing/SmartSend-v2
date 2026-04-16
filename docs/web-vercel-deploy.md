@@ -18,11 +18,15 @@ updated: 2026-04-16
 
 ## Vercel 项目设置
 
-在 Vercel 新建一个 Project，并把 Root Directory 设为：
+在 Vercel 新建一个 Project，并把 Root Directory 设为仓库根目录：
 
-`apps/web`
+`/Users/hugh/code/personal/SmartSend-v2`
 
-框架可使用 Vite 自动识别结果。
+说明：
+
+- 当前仓库是 monorepo
+- `apps/web` 依赖根目录配置和 `packages/contracts`
+- 因此不要把 Root Directory 直接设为 `apps/web`
 
 ## 必填环境变量
 
@@ -43,16 +47,19 @@ VITE_API_BASE_URL=https://your-api-host.example.com
 说明：
 
 - `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_ANON_KEY` 用于浏览器端 Supabase Auth
+- `VITE_SUPABASE_URL` 必须是 `https://<project-ref>.supabase.co`，不能填你的前端站点地址，例如 `http://127.0.0.1:5173`
 - `VITE_API_BASE_URL` 用于让前端请求真正的后端 API
 - 如果不提供 `VITE_API_BASE_URL`，前端会默认请求当前 origin 下的 `/api/*`
 - 在当前阶段，Vercel 上的 `apps/web` 项目本身并不提供这些 `/api/*` 路由
 
 ## 路由配置
 
-`apps/web/vercel.json` 已添加 SPA rewrite：
+仓库根目录 `vercel.json` 已添加 SPA rewrite，并指定：
 
 - 所有前端路由会回退到 `index.html`
 - `BrowserRouter` 深链接可直接打开
+- 构建命令使用 `npm run build:web`
+- 输出目录使用 `apps/web/dist`
 
 ## Supabase 配置
 

@@ -2,9 +2,9 @@ import { z } from "zod";
 import {
   providerErrorClassificationSchema,
   providerSchema,
-} from "../../domain/src/provider.js";
-import { sendJobStatusSchema } from "../../domain/src/campaign.js";
-import { entityIdSchema } from "../../domain/src/contact.js";
+  sendJobStatusSchema,
+  entityIdSchema,
+} from "./primitives.js";
 
 const isoDateTimeSchema = z.string().datetime();
 
