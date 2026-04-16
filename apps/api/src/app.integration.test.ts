@@ -12,9 +12,9 @@ import {
   resetIntegrationTestDatabase,
   sendJobs,
   seedWorkspaceMembershipFixture,
+  workspaceMembers,
 } from "@smartsend/db";
 
-import { createBetterAuthAdapter } from "./auth/better-auth.js";
 import { createDevHeaderAuthAdapter } from "./auth/dev-header-auth.js";
 import { createApiApp } from "./app.js";
 
@@ -995,79 +995,99 @@ integration("api protected routes", () => {
     await app.close();
   });
 
-  it("supports cookie session login -> me -> logout flow", async () => {
+  it("supports me -> switch-workspace flow with external token auth", async () => {
+    await db.insert(workspaceMembers).values({
+      workspaceId: "ws_2",
+      userId: "user_1",
+      role: "admin",
+    });
+
     const app = createApiApp({
       services: {
         db,
-        authAdapter: createBetterAuthAdapter(),
+        authAdapter: {
+          kind: "supabase",
+          async authenticate(request) {
+            if (request.headers.authorization !== "Bearer test-token") {
+              return null;
+            }
+
+            const workspaceHeader = request.headers["x-smartsend-workspace-id"];
+
+            return {
+              session: {
+                id: "supabase:test-user-1",
+                userId: "supabase_user_1",
+              },
+              user: {
+                id: "supabase_user_1",
+                email: "user1@example.com",
+                name: "User One",
+              },
+              currentWorkspaceId:
+                typeof workspaceHeader === "string" ? workspaceHeader : null,
+            };
+          },
+        },
       },
     });
     await app.ready();
-
-    const login = await app.inject({
-      method: "POST",
-      url: "/api/auth/login",
-      payload: {
-        email: "user1@example.com",
-      },
-    });
-
-    expect(login.statusCode).toBe(200);
-    const cookie = extractCookieHeader(login.headers["set-cookie"]);
-    expect(cookie).toContain("smartsend_session=");
 
     const me = await app.inject({
       method: "GET",
       url: "/api/auth/me",
       headers: {
-        cookie,
+        authorization: "Bearer test-token",
       },
     });
 
     expect(me.statusCode).toBe(200);
     const mePayload = me.json() as {
+      sessionId: string;
       user: { email: string };
       currentWorkspaceId: string;
-      workspaces: Array<{ workspaceId: string }>;
+      workspaces: Array<{ workspaceId: string; role: string }>;
     };
+
+    expect(mePayload.sessionId).toBe("supabase:test-user-1");
     expect(mePayload.user.email).toBe("user1@example.com");
     expect(mePayload.currentWorkspaceId).toBe("ws_1");
-    expect(mePayload.workspaces).toHaveLength(1);
+    expect(mePayload.workspaces).toHaveLength(2);
 
-    const logout = await app.inject({
+    const switched = await app.inject({
       method: "POST",
-      url: "/api/auth/logout",
+      url: "/api/auth/switch-workspace",
       headers: {
-        cookie,
+        authorization: "Bearer test-token",
+      },
+      payload: {
+        workspaceId: "ws_2",
       },
     });
 
-    expect(logout.statusCode).toBe(200);
+    expect(switched.statusCode).toBe(200);
+    const switchedPayload = switched.json() as {
+      currentWorkspaceId: string;
+      currentWorkspaceRole: string;
+    };
+    expect(switchedPayload.currentWorkspaceId).toBe("ws_2");
+    expect(switchedPayload.currentWorkspaceRole).toBe("admin");
 
-    const meAfterLogout = await app.inject({
+    const meAfterSwitch = await app.inject({
       method: "GET",
       url: "/api/auth/me",
       headers: {
-        cookie,
+        authorization: "Bearer test-token",
+        "x-smartsend-workspace-id": "ws_2",
       },
     });
 
-    expect(meAfterLogout.statusCode).toBe(401);
+    expect(meAfterSwitch.statusCode).toBe(200);
+    expect(meAfterSwitch.json()).toMatchObject({
+      currentWorkspaceId: "ws_2",
+      currentWorkspaceRole: "admin",
+    });
+
     await app.close();
   });
 });
-
-function extractCookieHeader(header: string | string[] | undefined) {
-  if (!header) {
-    throw new Error("Expected set-cookie header.");
-  }
-
-  const value = Array.isArray(header) ? header[0] : header;
-  const [cookie] = value.split(";");
-
-  if (!cookie) {
-    throw new Error("Expected cookie value.");
-  }
-
-  return cookie;
-}

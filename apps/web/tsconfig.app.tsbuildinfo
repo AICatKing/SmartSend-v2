@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/layout/appshell.tsx","./src/lib/api-client.ts","./src/lib/app-context.tsx","./src/lib/format.ts","./src/lib/supabase.ts","./src/pages/campaignspage.tsx","./src/pages/contactspage.tsx","./src/pages/homepage.tsx","./src/pages/loginpage.tsx","./src/pages/templatespage.tsx","./src/pages/workspaceconfigpage.tsx"],"version":"5.9.3"}

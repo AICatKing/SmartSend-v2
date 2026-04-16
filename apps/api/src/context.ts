@@ -1,9 +1,10 @@
 import { AppError } from "@smartsend/shared";
-import { and, eq } from "drizzle-orm";
-import { users, workspaceMembers } from "@smartsend/db";
+import { eq } from "drizzle-orm";
+import { users, workspaceMembers, workspaces, type Database } from "@smartsend/db";
 
-import type { ApiServices } from "./services.js";
 import type { ApiRequestContext } from "./auth/index.js";
+import type { AuthIdentity } from "./auth/types.js";
+import type { ApiServices } from "./services.js";
 
 export async function resolveApiRequestContext(
   services: ApiServices,
@@ -16,49 +17,149 @@ export async function resolveApiRequestContext(
   }
 
   const db = services.requireDatabase();
+  const { localUser, memberships } = await ensureLocalUserAndMemberships(db, identity);
+  const currentMembership = identity.currentWorkspaceId
+    ? memberships.find((item) => item.workspaceId === identity.currentWorkspaceId)
+    : memberships[0];
 
-  const membership = await db
-    .select({
-      userId: users.id,
-      userEmail: users.email,
-      userName: users.name,
-      workspaceRole: workspaceMembers.role,
-    })
-    .from(workspaceMembers)
-    .innerJoin(users, eq(workspaceMembers.userId, users.id))
-    .where(
-      and(
-        eq(workspaceMembers.userId, identity.user.id),
-        eq(workspaceMembers.workspaceId, identity.currentWorkspaceId),
-      ),
-    )
-    .limit(1);
-
-  const row = membership[0];
-
-  if (!row) {
+  if (!currentMembership) {
     throw new AppError(
       "FORBIDDEN",
-      "User does not belong to the requested workspace.",
-      {
-        details: {
-          userId: identity.user.id,
-          workspaceId: identity.currentWorkspaceId,
-        },
-      },
+      identity.currentWorkspaceId
+        ? "User does not belong to the requested workspace."
+        : "User does not belong to any accessible workspace.",
+      identity.currentWorkspaceId
+        ? {
+            details: {
+              userId: localUser.id,
+              workspaceId: identity.currentWorkspaceId,
+            },
+          }
+        : undefined,
     );
   }
 
   const context: ApiRequestContext = {
-    session: identity.session,
-    user: {
-      id: row.userId,
-      email: row.userEmail,
-      name: row.userName,
+    session: {
+      id: identity.session.id,
+      userId: localUser.id,
     },
-    currentWorkspaceId: identity.currentWorkspaceId,
-    workspaceRole: row.workspaceRole,
+    user: {
+      id: localUser.id,
+      email: localUser.email,
+      name: localUser.name,
+    },
+    currentWorkspaceId: currentMembership.workspaceId,
+    workspaceRole: currentMembership.role,
   };
 
   return context;
+}
+
+async function ensureLocalUserAndMemberships(db: Database, identity: AuthIdentity) {
+  const normalizedEmail = identity.user.email?.trim().toLowerCase() ?? null;
+  const normalizedName = identity.user.name?.trim() || null;
+
+  return db.transaction(async (tx) => {
+    let localUser = (
+      await tx
+        .select({
+          id: users.id,
+          email: users.email,
+          name: users.name,
+        })
+        .from(users)
+        .where(eq(users.id, identity.user.id))
+        .limit(1)
+    )[0];
+
+    if (!localUser && normalizedEmail) {
+      localUser = (
+        await tx
+          .select({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+          })
+          .from(users)
+          .where(eq(users.email, normalizedEmail))
+          .limit(1)
+      )[0];
+    }
+
+    if (!localUser) {
+      if (!normalizedEmail) {
+        throw new AppError(
+          "UNAUTHORIZED",
+          "Supabase user email is required for SmartSend workspace access.",
+        );
+      }
+
+      await tx.insert(users).values({
+        id: identity.user.id,
+        email: normalizedEmail,
+        name: normalizedName,
+      });
+
+      localUser = {
+        id: identity.user.id,
+        email: normalizedEmail,
+        name: normalizedName,
+      };
+    } else if (
+      (normalizedEmail && localUser.email !== normalizedEmail) ||
+      (normalizedName && localUser.name !== normalizedName)
+    ) {
+      await tx
+        .update(users)
+        .set({
+          email: normalizedEmail ?? localUser.email,
+          name: normalizedName ?? localUser.name,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, localUser.id));
+
+      localUser = {
+        ...localUser,
+        email: normalizedEmail ?? localUser.email,
+        name: normalizedName ?? localUser.name,
+      };
+    }
+
+    let memberships = await listMemberships(tx, localUser.id);
+
+    if (memberships.length === 0) {
+      const workspaceId = `ws_${crypto.randomUUID()}`;
+
+      await tx.insert(workspaces).values({
+        id: workspaceId,
+        name: `${normalizedName || localUser.email} Workspace`,
+      });
+
+      await tx.insert(workspaceMembers).values({
+        workspaceId,
+        userId: localUser.id,
+        role: "owner",
+      });
+
+      memberships = await listMemberships(tx, localUser.id);
+    }
+
+    return {
+      localUser,
+      memberships,
+    };
+  });
+}
+
+async function listMemberships(db: Pick<Database, "select">, userId: string) {
+  return db
+    .select({
+      workspaceId: workspaces.id,
+      role: workspaceMembers.role,
+    })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
+    .where(eq(workspaceMembers.userId, userId))
+    .orderBy(workspaces.createdAt);
 }

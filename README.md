@@ -39,25 +39,29 @@ Worker/local async shim currently requires:
 
 API auth/session currently uses:
 
-- `AUTH_MODE` (default `better_auth`)
-- `AUTH_SESSION_COOKIE_NAME` (default `smartsend_session`)
-- `AUTH_SESSION_TTL_DAYS` (default `30`)
+- `AUTH_MODE` (default `supabase`)
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
 Recommended local values:
 
 ```bash
-AUTH_MODE=better_auth
-AUTH_SESSION_COOKIE_NAME=smartsend_session
-AUTH_SESSION_TTL_DAYS=30
+AUTH_MODE=supabase
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/smartsend
 TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/smartsend_test
 API_ENCRYPTION_KEY=replace-with-at-least-32-characters
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 PROVIDER_MODE=mock
 ```
 
 Notes:
 
-- `AUTH_MODE=better_auth` is the product frontend path and uses real database-backed session context from cookie.
+- `AUTH_MODE=supabase` is the product frontend path. `apps/web` uses Supabase email OTP login, and `apps/api` verifies the access token with `supabase.auth.getUser(jwt)`.
 - `AUTH_MODE=dev_headers` remains available only for explicit local debugging (`/app` and manual header calls).
 - `DATABASE_URL` is the development database. `TEST_DATABASE_URL` must point to a separate database used only for integration tests.
 - `API_ENCRYPTION_KEY` must match the key used by `apps/api`, otherwise the worker cannot decrypt `workspace_sending_configs.encrypted_api_key`.
@@ -122,9 +126,10 @@ open http://127.0.0.1:5173
 Local auth flow:
 
 1. open `apps/web`
-2. login with an email (name optional)
-3. first login auto-provisions one workspace + owner membership for that user if no membership exists
-4. after login, switch workspace in the top bar selector if needed
+2. enter an email and request a Supabase OTP code
+3. verify the code in `apps/web`
+4. first successful login auto-provisions one workspace + owner membership for that user if no membership exists
+5. after login, switch workspace in the top bar selector if needed
 
 `apps/web` uses Vite dev proxy and forwards `/api` requests to `http://127.0.0.1:3000` by default.
 
@@ -142,6 +147,26 @@ Product pages currently cover the minimum real loop:
 - templates list/create/delete
 - campaign create draft / queue
 - campaign progress / send-jobs / recent-failures views
+
+## Deploy `apps/web` To Vercel
+
+`apps/web` can now be deployed as a standalone Vercel project.
+
+Requirements:
+
+- set Vercel project root directory to `apps/web`
+- configure `VITE_SUPABASE_URL`
+- configure `VITE_SUPABASE_ANON_KEY`
+- configure `VITE_API_BASE_URL` to point at a reachable backend API host
+
+Current limitation:
+
+- this only deploys the frontend SPA
+- `apps/api` and `apps/worker` are not yet production-ready Vercel deployment units
+
+Detailed setup notes:
+
+- see [docs/web-vercel-deploy.md](/Users/hugh/code/personal/SmartSend-v2/docs/web-vercel-deploy.md)
 
 ## `/app` Integration Tool Page
 

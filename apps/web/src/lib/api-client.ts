@@ -1,7 +1,5 @@
 import {
   authListWorkspacesOutputSchema,
-  authLoginInputSchema,
-  authLoginOutputSchema,
   authLogoutOutputSchema,
   authMeOutputSchema,
   authSwitchWorkspaceInputSchema,
@@ -53,18 +51,18 @@ export type SendingConfigInput = Omit<
 const defaultJsonHeaders = {
   "content-type": "application/json",
 };
+const apiBaseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 export class ApiClient {
-  async login(input: unknown) {
-    const body = authLoginInputSchema.parse(input);
+  private accessToken: string | null = null;
+  private workspaceId: string | null = null;
 
-    const data = await this.request("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: defaultJsonHeaders,
-    });
+  setAccessToken(accessToken: string | null) {
+    this.accessToken = accessToken;
+  }
 
-    return authLoginOutputSchema.parse(data);
+  setWorkspaceId(workspaceId: string | null) {
+    this.workspaceId = workspaceId;
   }
 
   async logout() {
@@ -223,12 +221,20 @@ export class ApiClient {
   }
 
   private async request(path: string, init: RequestInit = {}) {
-    const response = await fetch(path, {
+    const headers = new Headers(init.headers ?? undefined);
+
+    if (this.accessToken) {
+      headers.set("authorization", `Bearer ${this.accessToken}`);
+    }
+
+    if (this.workspaceId) {
+      headers.set("x-smartsend-workspace-id", this.workspaceId);
+    }
+
+    const response = await fetch(resolveApiUrl(path), {
       ...init,
       credentials: "include",
-      headers: {
-        ...(init.headers ?? {}),
-      },
+      headers,
     });
 
     const data = await response
@@ -245,4 +251,26 @@ export class ApiClient {
 
     return data;
   }
+}
+
+function resolveApiUrl(path: string) {
+  if (!apiBaseUrl) {
+    return path;
+  }
+
+  return new URL(path, apiBaseUrl).toString();
+}
+
+function normalizeBaseUrl(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 }

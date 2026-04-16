@@ -15,7 +15,7 @@ export type AuthUser = {
 export type AuthIdentity = {
   session: AuthSession;
   user: AuthUser;
-  currentWorkspaceId: string;
+  currentWorkspaceId: string | null;
 };
 
 export type ApiRequestContext = {
@@ -26,6 +26,6 @@ export type ApiRequestContext = {
 };
 
 export interface AuthAdapter {
-  readonly kind: "dev_headers" | "better_auth";
+  readonly kind: "dev_headers" | "supabase";
   authenticate(request: FastifyRequest): Promise<AuthIdentity | null>;
 }

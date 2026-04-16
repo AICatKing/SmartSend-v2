@@ -4,39 +4,43 @@ import { useAppContext } from "../lib/app-context";
 import { asErrorMessage } from "../lib/format";
 
 export function LoginPage() {
-  const { login, authError } = useAppContext();
+  const { requestLoginCode, verifyLoginCode, authError } = useAppContext();
   const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [workspaceId, setWorkspaceId] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [token, setToken] = useState("");
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function submit() {
-    setSubmitting(true);
+  async function sendCode() {
+    setSendingCode(true);
     setMessage("");
 
     try {
-      const payload: { email: string; name?: string; workspaceId?: string } = {
+      await requestLoginCode(email);
+      setCodeSent(true);
+      setMessage("验证码已发送，请检查邮箱。");
+    } catch (error) {
+      setMessage(asErrorMessage(error));
+    } finally {
+      setSendingCode(false);
+    }
+  }
+
+  async function submitCode() {
+    setVerifyingCode(true);
+    setMessage("");
+
+    try {
+      await verifyLoginCode({
         email,
-      };
-
-      const trimmedName = name.trim();
-      const trimmedWorkspaceId = workspaceId.trim();
-
-      if (trimmedName) {
-        payload.name = trimmedName;
-      }
-
-      if (trimmedWorkspaceId) {
-        payload.workspaceId = trimmedWorkspaceId;
-      }
-
-      await login(payload);
+        token,
+      });
       setMessage("登录成功，正在进入系统...");
     } catch (error) {
       setMessage(asErrorMessage(error));
     } finally {
-      setSubmitting(false);
+      setVerifyingCode(false);
     }
   }
 
@@ -44,7 +48,7 @@ export function LoginPage() {
     <main className="login-page">
       <section className="login-card">
         <h1>SmartSend 登录</h1>
-        <p className="muted">使用真实会话上下文访问 workspace 内业务资源。</p>
+        <p className="muted">使用 Supabase 邮箱验证码登录，再进入 workspace 内业务资源。</p>
         <label>
           邮箱
           <input
@@ -54,26 +58,29 @@ export function LoginPage() {
             placeholder="you@example.com"
           />
         </label>
-        <label>
-          显示名称（首次登录可选）
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="你的名字"
-          />
-        </label>
-        <label>
-          目标工作区 ID（可选）
-          <input
-            value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
-            placeholder="留空则使用默认工作区"
-          />
-        </label>
+        {codeSent ? (
+          <label>
+            邮箱验证码
+            <input
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              placeholder="输入 6 位验证码"
+            />
+          </label>
+        ) : null}
         <div className="actions">
-          <button disabled={submitting || !email.trim()} type="button" onClick={() => void submit()}>
-            {submitting ? "登录中..." : "登录"}
+          <button disabled={sendingCode || !email.trim()} type="button" onClick={() => void sendCode()}>
+            {sendingCode ? "发送中..." : codeSent ? "重新发送验证码" : "发送验证码"}
           </button>
+          {codeSent ? (
+            <button
+              disabled={verifyingCode || !email.trim() || !token.trim()}
+              type="button"
+              onClick={() => void submitCode()}
+            >
+              {verifyingCode ? "验证中..." : "验证并登录"}
+            </button>
+          ) : null}
         </div>
         {message ? <p className="status-text">{message}</p> : null}
         {authError ? <p className="status-text">{authError}</p> : null}
